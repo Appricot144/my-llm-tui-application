@@ -6,6 +6,7 @@ import { MessageList } from "./components/MessageList.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
 import { run } from "./agent/agent.ts";
 import { nextMode, MODE_LABELS } from "./utils/modeHelper.ts";
+import { createTokenUsage, addTokenUsage, formatTokenUsage, type TokenUsage } from "./utils/tokenUsage.ts";
 import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
 
@@ -14,6 +15,7 @@ const PROJECT_ROOT = process.cwd();
 function App() {
   const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
   const [mode, setMode] = useState<Mode>("chat");
+  const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
 
   const handleModeChange = useCallback(() => {
     setMode((prev) => nextMode(prev));
@@ -29,7 +31,7 @@ function App() {
         ({ role, content }: Message) => ({ role, content })
       );
 
-      await run({
+      const result = await run({
         userMessage: text,
         conversationHistory,
         projectRoot: PROJECT_ROOT,
@@ -42,6 +44,11 @@ function App() {
           updateLastAssistantMessage(`[ツール実行中] ${toolName}(${inputPreview})\n`);
         },
       });
+
+      setTotalTokenUsage((prev) => addTokenUsage(prev, {
+        input_tokens: result.tokenUsage.inputTokens,
+        output_tokens: result.tokenUsage.outputTokens,
+      }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "不明なエラーが発生しました";
       updateLastAssistantMessage(`エラー: ${errorMessage}`);
@@ -62,6 +69,14 @@ function App() {
         <text fg="#666666"> | {MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
       </box>
       <MessageList messages={messages} loading={loading} />
+      <box
+        borderStyle="rounded"
+        border={["top"]}
+        borderColor="#333333"
+        paddingLeft={1}
+      >
+        <text fg="#888888">Tokens: {formatTokenUsage(totalTokenUsage)}</text>
+      </box>
       <ChatInput
         onSubmit={handleSubmit}
         onModeChange={handleModeChange}

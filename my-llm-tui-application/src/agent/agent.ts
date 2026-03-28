@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
+import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
 
 // ========================================================
 // 設定
@@ -40,6 +41,8 @@ export interface RunResult {
   text: string;
   /** エージェントループ中の全メッセージ（履歴更新用） */
   newMessages: Anthropic.Messages.MessageParam[];
+  /** 今回のリクエスト全体のトークン使用量（ループ全イテレーション累計） */
+  tokenUsage: TokenUsage;
 }
 
 type ContentBlock = Anthropic.Messages.ContentBlock;
@@ -75,6 +78,8 @@ export async function run({
     ...newMessages,
   ];
 
+  let tokenUsage = createTokenUsage();
+
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     const requestParams: Anthropic.Messages.MessageStreamParams = {
       model: MODEL,
@@ -96,6 +101,7 @@ export async function run({
     });
 
     const response = await stream.finalMessage();
+    tokenUsage = addTokenUsage(tokenUsage, response.usage);
 
     // アシスタントの返答を履歴に追加
     newMessages.push({ role: "assistant", content: response.content });
@@ -104,6 +110,7 @@ export async function run({
       return {
         text: extractText(response.content),
         newMessages,
+        tokenUsage,
       };
     }
 
@@ -121,6 +128,7 @@ export async function run({
   return {
     text: "エラー: 最大反復回数に達しました",
     newMessages,
+    tokenUsage,
   };
 }
 
