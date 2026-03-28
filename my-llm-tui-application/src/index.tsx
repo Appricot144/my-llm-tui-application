@@ -70,6 +70,7 @@ function App() {
       </box>
       <MessageList messages={messages} loading={loading} />
       <box
+        flexShrink={0}
         borderStyle="rounded"
         border={["top"]}
         borderColor="#333333"
