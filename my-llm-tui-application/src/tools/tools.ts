@@ -165,8 +165,8 @@ export function searchCode(pattern: string, inputPath: string = "."): string {
     }
     const rel = path.relative(allowedRoot!, filePath);
     for (let i = 0; i < fileLines.length; i++) {
-      if (regex.test(fileLines[i])) {
-        results.push(`${rel}:${i + 1}: ${fileLines[i].trimEnd()}`);
+      if (regex.test(fileLines[i]!)) {
+        results.push(`${rel}:${i + 1}: ${fileLines[i]!.trimEnd()}`);
         if (results.length >= MAX_SEARCH_RESULTS) return;
       }
     }
