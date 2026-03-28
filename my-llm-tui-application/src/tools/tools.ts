@@ -1,0 +1,311 @@
+/**
+ * tools.ts — ツール定義 + Executor
+ *
+ * セキュリティ境界はここに集約する。
+ * 後から security.ts に切り出して差し替え可能。
+ */
+
+import fs from "fs";
+import path from "path";
+
+// ========================================================
+// 設定（最低限のセキュリティ境界）
+// ========================================================
+
+let allowedRoot: string | null = null; // agent.ts から setRoot() で設定する
+const MAX_FILE_LINES = 500;            // 一度に読む最大行数（拡張点: context.ts へ移動）
+const MAX_SEARCH_RESULTS = 20;         // grep の最大マッチ数
+
+const IGNORE_DIRS = new Set([".git", "__pycache__", "node_modules", ".venv", "dist", "build"]);
+const SKIP_EXTENSIONS = new Set([".pyc", ".lock", ".png", ".jpg", ".svg", ".woff", ".ttf"]);
+
+export function setRoot(rootPath: string): void {
+  allowedRoot = fs.realpathSync(path.resolve(rootPath));
+}
+
+/**
+ * パストラバーサル防止。allowedRoot 外へのアクセスを拒否する。
+ * （拡張点: security.ts に移動して allowlist/denylist を追加できる）
+ */
+function validatePath(inputPath: string): string {
+  if (!allowedRoot) throw new Error("setRoot() が呼ばれていません");
+
+  const resolved = path.resolve(allowedRoot, inputPath);
+  if (!resolved.startsWith(allowedRoot + path.sep) && resolved !== allowedRoot) {
+    throw new Error(`アクセス拒否: ${inputPath} は許可されたディレクトリ外です`);
+  }
+  return resolved;
+}
+
+// ========================================================
+// ツール実装
+// ========================================================
+
+export function listDirectory(inputPath: string = "."): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  if (!fs.existsSync(target) || !fs.statSync(target).isDirectory()) {
+    return `エラー: ${inputPath} はディレクトリではありません`;
+  }
+
+  const lines: string[] = [`# ${inputPath}/`];
+
+  function walk(dirPath: string, prefix: string, depth: number): void {
+    if (depth > 4) return; // 深さ制限（拡張点: 設定化）
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    // ディレクトリ優先、名前順にソート
+    entries = entries
+      .filter((e) => !e.name.startsWith(".") && !IGNORE_DIRS.has(e.name))
+      .sort((a, b) => {
+        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    entries.forEach((entry, i) => {
+      const isLast = i === entries.length - 1;
+      const connector = isLast ? "└── " : "├── ";
+      const suffix = entry.isDirectory() ? "/" : "";
+      lines.push(`${prefix}${connector}${entry.name}${suffix}`);
+
+      if (entry.isDirectory()) {
+        const extension = isLast ? "    " : "│   ";
+        walk(path.join(dirPath, entry.name), prefix + extension, depth + 1);
+      }
+    });
+  }
+
+  walk(target, "", 0);
+  return lines.join("\n");
+}
+
+export function readFile(
+  inputPath: string,
+  startLine: number = 1,
+  endLine?: number
+): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    return `エラー: ${inputPath} はファイルではありません`;
+  }
+
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(target, "utf-8").split("\n");
+  } catch (e) {
+    return `エラー: 読み取り失敗 (${(e as Error).message})`;
+  }
+
+  const total = lines.length;
+  const s = Math.max(1, startLine) - 1;               // 0-indexed
+  let e = endLine ? Math.min(total, endLine) : total;  // 0-indexed exclusive
+
+  let truncated = false;
+  if (e - s > MAX_FILE_LINES) {
+    e = s + MAX_FILE_LINES;
+    truncated = true;
+  }
+
+  const numbered = lines
+    .slice(s, e)
+    .map((line, i) => `${String(s + i + 1).padStart(4)} | ${line}`)
+    .join("\n");
+
+  if (truncated) {
+    return (
+      numbered +
+      `\n\n... (表示: ${s + 1}〜${e}行目 / 全${total}行)` +
+      `\n続きを読むには: read_file("${inputPath}", ${e + 1})`
+    );
+  }
+  return `# ${inputPath} (${s + 1}〜${e}行目 / 全${total}行)\n` + numbered;
+}
+
+export function searchCode(pattern: string, inputPath: string = "."): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern);
+  } catch (e) {
+    return `エラー: 無効な正規表現 (${(e as Error).message})`;
+  }
+
+  const results: string[] = [];
+
+  function searchFile(filePath: string): void {
+    if (results.length >= MAX_SEARCH_RESULTS) return;
+    let fileLines: string[];
+    try {
+      fileLines = fs.readFileSync(filePath, "utf-8").split("\n");
+    } catch {
+      return;
+    }
+    const rel = path.relative(allowedRoot!, filePath);
+    for (let i = 0; i < fileLines.length; i++) {
+      if (regex.test(fileLines[i])) {
+        results.push(`${rel}:${i + 1}: ${fileLines[i].trimEnd()}`);
+        if (results.length >= MAX_SEARCH_RESULTS) return;
+      }
+    }
+  }
+
+  function walkAndSearch(dirPath: string): void {
+    if (results.length >= MAX_SEARCH_RESULTS) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (entry.name.startsWith(".") || IGNORE_DIRS.has(entry.name)) continue;
+      const full = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        walkAndSearch(full);
+      } else if (entry.isFile() && !SKIP_EXTENSIONS.has(path.extname(entry.name))) {
+        searchFile(full);
+      }
+      if (results.length >= MAX_SEARCH_RESULTS) break;
+    }
+  }
+
+  const stat = fs.statSync(target);
+  if (stat.isFile()) {
+    searchFile(target);
+  } else if (stat.isDirectory()) {
+    walkAndSearch(target);
+  }
+
+  if (results.length === 0) {
+    return `マッチなし: pattern=${JSON.stringify(pattern)} in ${inputPath}`;
+  }
+
+  let header = `# search: ${JSON.stringify(pattern)} in ${inputPath} (${results.length} 件)`;
+  if (results.length >= MAX_SEARCH_RESULTS) {
+    header += "  ※ 上限に達しました。pattern を絞るか path を限定してください";
+  }
+  return header + "\n" + results.join("\n");
+}
+
+// ========================================================
+// Anthropic API に渡す tools スキーマ
+// ========================================================
+
+export const TOOL_SCHEMAS = [
+  {
+    name: "list_directory",
+    description:
+      "ディレクトリ内のファイル・フォルダの一覧をツリー形式で返す。" +
+      "まずここを呼んでプロジェクト構造を把握するとよい。",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "調べるディレクトリのパス（ルートからの相対パス）。省略時は '.'",
+          default: ".",
+        },
+      },
+    },
+  },
+  {
+    name: "read_file",
+    description:
+      "ソースファイルを読む。start_line / end_line で範囲指定可能。" +
+      "大きなファイルは範囲を絞って複数回に分けて読むこと。",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "読むファイルのパス（ルートからの相対パス）",
+        },
+        start_line: {
+          type: "integer",
+          description: "読み始め行番号（1始まり）。省略時は先頭",
+          default: 1,
+        },
+        end_line: {
+          type: "integer",
+          description: "読み終わり行番号（1始まり、含む）。省略時はファイル末尾まで",
+        },
+      },
+      required: ["path"],
+    },
+  },
+  {
+    name: "search_code",
+    description:
+      "正規表現でコードを検索し、マッチ箇所のファイル名と行番号を返す。" +
+      "関数名・クラス名・エラーメッセージなどを手がかりに場所を特定するのに使う。",
+    input_schema: {
+      type: "object",
+      properties: {
+        pattern: {
+          type: "string",
+          description:
+            "検索する正規表現パターン（例: 'function processOrder', 'TODO', 'throw new Error'）",
+        },
+        path: {
+          type: "string",
+          description: "検索対象のファイルまたはディレクトリ。省略時はルート全体",
+          default: ".",
+        },
+      },
+      required: ["pattern"],
+    },
+  },
+] as const;
+
+// ========================================================
+// ツール呼び出しディスパッチャ
+// ========================================================
+
+type ToolInput = Record<string, unknown>;
+
+export function dispatch(toolName: string, toolInput: ToolInput): string {
+  try {
+    switch (toolName) {
+      case "list_directory":
+        return listDirectory((toolInput.path as string) ?? ".");
+      case "read_file":
+        return readFile(
+          toolInput.path as string,
+          toolInput.start_line as number | undefined,
+          toolInput.end_line as number | undefined
+        );
+      case "search_code":
+        return searchCode(
+          toolInput.pattern as string,
+          (toolInput.path as string) ?? "."
+        );
+      default:
+        return `エラー: 未知のツール '${toolName}'`;
+    }
+  } catch (e) {
+    return `実行エラー (${toolName}): ${(e as Error).message}`;
+  }
+}
