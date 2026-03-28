@@ -20,11 +20,29 @@ describe("getPrompt", () => {
     expect(prompt.length).toBeGreaterThan(0);
   });
 
+  it("chat モードでシステムプロンプトを返す", () => {
+    const prompt = getPrompt("chat");
+    expect(typeof prompt).toBe("string");
+    expect(prompt.length).toBeGreaterThan(0);
+  });
+
+  it("chat モードのプロンプトにツール関連の指示が含まれない", () => {
+    const prompt = getPrompt("chat");
+    expect(prompt).not.toContain("list_directory");
+    expect(prompt).not.toContain("read_file");
+    expect(prompt).not.toContain("search_code");
+    expect(prompt).not.toContain("ツール");
+  });
+
   it("各モードで異なるプロンプトを返す", () => {
+    const chat = getPrompt("chat");
     const debug = getPrompt("debug");
     const review = getPrompt("review");
     const coding = getPrompt("coding");
 
+    expect(chat).not.toBe(debug);
+    expect(chat).not.toBe(review);
+    expect(chat).not.toBe(coding);
     expect(debug).not.toBe(review);
     expect(debug).not.toBe(coding);
     expect(review).not.toBe(coding);

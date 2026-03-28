@@ -2,7 +2,7 @@
  * prompts.ts — モード別システムプロンプト
  */
 
-export type Mode = "debug" | "review" | "coding";
+export type Mode = "chat" | "debug" | "review" | "coding";
 
 const COMMON_INSTRUCTIONS = [
   "与えられたツールを使ってプロジェクトのファイルを探索し、情報を収集してください。",
@@ -13,6 +13,12 @@ const COMMON_INSTRUCTIONS = [
 ].join("\n");
 
 const PROMPTS: Record<Mode, string> = {
+  chat: [
+    "あなたは親切で知識豊富なアシスタントです。",
+    "ユーザーとの自然な会話を行い、質問に丁寧に答えてください。",
+    "回答は日本語で行ってください。",
+  ].join("\n"),
+
   debug: [
     "あなたはデバッグの専門家です。ユーザーが報告したバグや問題の原因を特定してください。",
     "",

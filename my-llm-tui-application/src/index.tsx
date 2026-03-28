@@ -26,7 +26,7 @@ function App() {
         userMessage: text,
         conversationHistory,
         projectRoot: PROJECT_ROOT,
-        mode: "coding",
+        mode: "chat",
         onTextDelta: (fullText) => {
           updateLastAssistantMessage(fullText);
         },
@@ -52,7 +52,7 @@ function App() {
         paddingLeft={1}
       >
         <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
-        <text fg="#666666"> | Agent Mode | Ctrl+C で終了</text>
+        <text fg="#666666"> | Chat Mode | Ctrl+C で終了</text>
       </box>
       <MessageList messages={messages} loading={loading} />
       <ChatInput

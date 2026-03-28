@@ -56,7 +56,10 @@ export async function run({
   onTextDelta,
   onToolUse,
 }: RunOptions): Promise<RunResult> {
-  setRoot(projectRoot);
+  const useTools = mode !== "chat";
+  if (useTools) {
+    setRoot(projectRoot);
+  }
 
   const client = new Anthropic();
   const systemPrompt = getPrompt(mode);
@@ -73,13 +76,17 @@ export async function run({
   ];
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    const stream = client.messages.stream({
+    const requestParams: Anthropic.Messages.MessageStreamParams = {
       model: MODEL,
       max_tokens: 4096,
       system: systemPrompt,
-      tools: TOOL_SCHEMAS as unknown as Anthropic.Messages.Tool[],
       messages: allMessages(),
-    });
+    };
+    if (useTools) {
+      requestParams.tools = TOOL_SCHEMAS as unknown as Anthropic.Messages.Tool[];
+    }
+
+    const stream = client.messages.stream(requestParams);
 
     // ストリーミングでテキストをリアルタイム通知
     let currentText = "";
