@@ -1,15 +1,23 @@
+import { useState, useCallback } from "react";
 import { createCliRenderer, TextAttributes } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useChat } from "./hooks/useChat.ts";
 import { MessageList } from "./components/MessageList.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
 import { run } from "./agent/agent.ts";
+import { nextMode, MODE_LABELS } from "./utils/modeHelper.ts";
+import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
 
 const PROJECT_ROOT = process.cwd();
 
 function App() {
   const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
+  const [mode, setMode] = useState<Mode>("chat");
+
+  const handleModeChange = useCallback(() => {
+    setMode((prev) => nextMode(prev));
+  }, []);
 
   const handleSubmit = async (text: string) => {
     addUserMessage(text);
@@ -17,7 +25,6 @@ function App() {
     addAssistantMessage("");
 
     try {
-      // 会話履歴をAPI形式に変換（今回のメッセージは含めない）
       const conversationHistory = messages.map(
         ({ role, content }: Message) => ({ role, content })
       );
@@ -26,7 +33,7 @@ function App() {
         userMessage: text,
         conversationHistory,
         projectRoot: PROJECT_ROOT,
-        mode: "chat",
+        mode,
         onTextDelta: (fullText) => {
           updateLastAssistantMessage(fullText);
         },
@@ -52,11 +59,12 @@ function App() {
         paddingLeft={1}
       >
         <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
-        <text fg="#666666"> | Chat Mode | Ctrl+C で終了</text>
+        <text fg="#666666"> | {MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
       </box>
       <MessageList messages={messages} loading={loading} />
       <ChatInput
         onSubmit={handleSubmit}
+        onModeChange={handleModeChange}
         disabled={loading}
       />
     </box>

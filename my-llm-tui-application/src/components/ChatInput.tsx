@@ -5,14 +5,21 @@ import { isPrintableCharacter } from "../utils/inputHelper.ts";
 
 interface ChatInputProps {
   onSubmit: (value: string) => void;
+  onModeChange: () => void;
   disabled: boolean;
 }
 
-export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
+export function ChatInput({ onSubmit, onModeChange, disabled }: ChatInputProps) {
   const [value, setValue] = useState("");
 
   const handleKey = useCallback((key: KeyEvent) => {
     if (disabled) return;
+
+    // Shift+Tab: モード切替
+    if (key.name === "tab" && key.shift) {
+      onModeChange();
+      return;
+    }
 
     if (key.name === "return") {
       const trimmed = value.trim();
@@ -45,7 +52,7 @@ export function ChatInput({ onSubmit, disabled }: ChatInputProps) {
     if (char && isPrintableCharacter(char)) {
       setValue((prev) => prev + char);
     }
-  }, [disabled, value, onSubmit]);
+  }, [disabled, value, onSubmit, onModeChange]);
 
   useKeyboard(handleKey);
 
