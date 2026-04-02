@@ -9,19 +9,24 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
+import type { LLMProvider, NormalizedContentBlock } from "../providers/types.ts";
 
 // ========================================================
-// 設定
+// 定数
 // ========================================================
 
-const MODEL = "claude-sonnet-4-20250514";
 const MAX_ITERATIONS = 20;
+const MAX_TOKENS = 4096;
 
 // ========================================================
 // 型定義
 // ========================================================
 
 export interface RunOptions {
+  /** 使用するLLMプロバイダー */
+  provider: LLMProvider;
+  /** 使用するモデル名 */
+  model: string;
   /** 今回のユーザーメッセージ */
   userMessage: string;
   /** これまでの会話履歴（API形式） */
@@ -45,13 +50,13 @@ export interface RunResult {
   tokenUsage: TokenUsage;
 }
 
-type ContentBlock = Anthropic.Messages.ContentBlock;
-
 // ========================================================
 // エージェント本体
 // ========================================================
 
 export async function run({
+  provider,
+  model,
   userMessage,
   conversationHistory,
   projectRoot,
@@ -59,12 +64,11 @@ export async function run({
   onTextDelta,
   onToolUse,
 }: RunOptions): Promise<RunResult> {
-  const useTools = mode !== "chat";
+  const useTools = mode !== "chat" && provider.supportsTools;
   if (useTools) {
     setRoot(projectRoot);
   }
 
-  const client = new Anthropic();
   const systemPrompt = getPrompt(mode);
 
   // エージェントループ中に追加されるメッセージ
@@ -81,32 +85,31 @@ export async function run({
   let tokenUsage = createTokenUsage();
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    const requestParams: Anthropic.Messages.MessageStreamParams = {
-      model: MODEL,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: allMessages(),
-    };
-    if (useTools) {
-      requestParams.tools = TOOL_SCHEMAS as unknown as Anthropic.Messages.Tool[];
-    }
+    const response = await provider.streamMessage(
+      {
+        model,
+        maxTokens: MAX_TOKENS,
+        system: systemPrompt,
+        messages: allMessages(),
+        tools: useTools ? (TOOL_SCHEMAS as unknown as Parameters<typeof provider.streamMessage>[0]["tools"]) : undefined,
+      },
+      (fullText) => {
+        onTextDelta?.(fullText);
+      }
+    );
 
-    const stream = client.messages.stream(requestParams);
-
-    // ストリーミングでテキストをリアルタイム通知
-    let currentText = "";
-    stream.on("text", (text) => {
-      currentText += text;
-      onTextDelta?.(currentText);
+    tokenUsage = addTokenUsage(tokenUsage, {
+      input_tokens: response.usage.inputTokens,
+      output_tokens: response.usage.outputTokens,
     });
 
-    const response = await stream.finalMessage();
-    tokenUsage = addTokenUsage(tokenUsage, response.usage);
-
     // アシスタントの返答を履歴に追加
-    newMessages.push({ role: "assistant", content: response.content });
+    newMessages.push({
+      role: "assistant",
+      content: response.content as unknown as Anthropic.Messages.ContentBlockParam[],
+    });
 
-    if (response.stop_reason === "end_turn") {
+    if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
       return {
         text: extractText(response.content),
         newMessages,
@@ -114,11 +117,9 @@ export async function run({
       };
     }
 
-    if (response.stop_reason === "tool_use") {
+    if (response.stopReason === "tool_use") {
       const toolResults = handleToolUse(response.content, onToolUse);
       newMessages.push({ role: "user", content: toolResults });
-      // 次のイテレーションでテキスト表示をリセット
-      currentText = "";
       continue;
     }
 
@@ -137,7 +138,7 @@ export async function run({
 // ========================================================
 
 function handleToolUse(
-  contentBlocks: ContentBlock[],
+  contentBlocks: NormalizedContentBlock[],
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
 ): Anthropic.Messages.ToolResultBlockParam[] {
   const results: Anthropic.Messages.ToolResultBlockParam[] = [];
@@ -146,7 +147,7 @@ function handleToolUse(
     if (block.type !== "tool_use") continue;
 
     const toolName = block.name;
-    const toolInput = block.input as Record<string, unknown>;
+    const toolInput = block.input;
 
     onToolUse?.(toolName, toolInput);
 
@@ -162,9 +163,9 @@ function handleToolUse(
   return results;
 }
 
-function extractText(contentBlocks: ContentBlock[]): string {
+function extractText(contentBlocks: NormalizedContentBlock[]): string {
   return contentBlocks
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("\n");
 }

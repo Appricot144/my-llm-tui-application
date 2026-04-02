@@ -7,10 +7,15 @@ import { ChatInput } from "./components/ChatInput.tsx";
 import { run } from "./agent/agent.ts";
 import { nextMode, MODE_LABELS } from "./utils/modeHelper.ts";
 import { createTokenUsage, addTokenUsage, formatTokenUsage, type TokenUsage } from "./utils/tokenUsage.ts";
+import { loadConfig } from "./config/config.ts";
+import { createProvider } from "./providers/factory.ts";
+import type { LLMProvider } from "./providers/types.ts";
 import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
 
 const PROJECT_ROOT = process.cwd();
+const appConfig = loadConfig();
+const provider: LLMProvider = createProvider(appConfig);
 
 function App() {
   const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
@@ -32,6 +37,8 @@ function App() {
       );
 
       const result = await run({
+        provider,
+        model: appConfig.model,
         userMessage: text,
         conversationHistory,
         projectRoot: PROJECT_ROOT,
