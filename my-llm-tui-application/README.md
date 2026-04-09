@@ -75,6 +75,72 @@ Coding・Debug・Review モードで LLM が使用できるツール：
 - **read_file** — ファイル内容の読み取り（行範囲指定可能）
 - **search_code** — 正規表現によるコード検索
 
+## 設定ファイルの使い方
+
+### 1. ファイルの置き場所
+
+以下の順で探索されます（先に見つかった方が使われます）：
+
+~/.config/llm-tui/config.json   ← 優先（グローバル設定）
+./config.json                   ← 次点（プロジェクトローカル）
+
+設定ファイルがない場合は Anthropic のデフォルト設定（ANTHROPIC_API_KEY 環境変数）が使われます。
+
+### 2. パターン別の設定例
+
+Anthropic（デフォルトと同じ）
+```
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-20250514",
+  "apiKey": "${ANTHROPIC_API_KEY}"
+}
+```
+Anthropic 互換プロキシ（baseUrl だけ変える）
+```
+{
+  "provider": "anthropic",
+  "baseUrl": "https://your-proxy.example.com",
+  "model": "claude-sonnet-v2",
+  "apiKey": "${YOUR_API_KEY}",
+  "headers": {
+    "X-Custom-Header": "value"
+  }
+}
+```
+OpenAI 互換（Bedrock wrapper 等）
+```
+{
+  "provider": "openai-compatible",
+  "baseUrl": "https://your-bedrock-wrapper.example.com",
+  "model": "your-custom-model",
+  "apiKey": "${YOUR_API_KEY}",
+  "headers": {
+    "X-Service-Token": "${SERVICE_TOKEN}"
+  },
+  "toolUse": false
+}
+```
+### 3. 設定項目一覧
+
+|キー|必須|説明|
+|---|---|---|
+| provider | ✓ |"anthropic" または "openai-compatible" |
+| model    | ✓ | モデル名（例: "claude-sonnet-4-20250514"） |
+| baseUrl  | openai-compatible は必須 | カスタムエンドポイント URL |
+| apiKey   | — | API キー。省略時は SDK デフォルト（環境変数）を使用 |
+| headers  | — | リクエストに追加するカスタムヘッダー（任意の数）|
+| toolUse  | — | ツール使用の有効/無効。省略時: anthropic=true、openai-compatible=false |
+
+### 4. 環境変数参照
+
+apiKey や headers の値に ${VAR_NAME} と書くと、実行時に環境変数の値に展開されます。
+
+export YOUR_API_KEY="sk-xxxx"
+export SERVICE_TOKEN="token-yyyy"
+
+設定ファイルにシークレットを直書きせずに済みます。
+
 ## ライセンス
 
 MIT

@@ -1,4 +1,5 @@
 import type { Message } from "../types.ts";
+import { LoadingSpinner } from "./LoadingSpinner.tsx";
 
 interface MessageListProps {
   messages: Message[];
@@ -31,7 +32,7 @@ export function MessageList({ messages, loading }: MessageListProps) {
       })}
       {loading && (
         <box marginTop={1}>
-          <text fg="#888888">考え中...</text>
+          <LoadingSpinner />
         </box>
       )}
     </scrollbox>
