@@ -210,6 +210,89 @@ export function searchCode(pattern: string, inputPath: string = "."): string {
   return header + "\n" + results.join("\n");
 }
 
+export function writeFile(inputPath: string, content: string): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  try {
+    const dir = path.dirname(target);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(target, content, "utf-8");
+  } catch (e) {
+    return `エラー: ${(e as Error).message}`;
+  }
+
+  const lineCount = content.split("\n").length;
+  return `書き込み完了: ${inputPath} (${lineCount} 行)`;
+}
+
+export function editFile(
+  inputPath: string,
+  startLine: number,
+  endLine: number,
+  newContent: string
+): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+    return `エラー: ${inputPath} はファイルではありません`;
+  }
+
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(target, "utf-8").split("\n");
+  } catch (e) {
+    return `エラー: 読み取り失敗 (${(e as Error).message})`;
+  }
+
+  const total = lines.length;
+  if (startLine < 1 || endLine > total || startLine > endLine) {
+    return `エラー: 行範囲が不正です (${startLine}〜${endLine} / 全${total}行)`;
+  }
+
+  const newLines = newContent.split("\n");
+  const s = startLine - 1; // 0-indexed
+  lines.splice(s, endLine - startLine + 1, ...newLines);
+
+  try {
+    fs.writeFileSync(target, lines.join("\n"), "utf-8");
+  } catch (e) {
+    return `エラー: ${(e as Error).message}`;
+  }
+
+  return `編集完了: ${inputPath} (${startLine}〜${endLine}行目を ${newLines.length} 行に置換)`;
+}
+
+export function createDirectory(inputPath: string): string {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch (e) {
+    return `セキュリティエラー: ${(e as Error).message}`;
+  }
+
+  if (fs.existsSync(target) && fs.statSync(target).isDirectory()) {
+    return `既に存在します: ${inputPath}`;
+  }
+
+  try {
+    fs.mkdirSync(target, { recursive: true });
+  } catch (e) {
+    return `エラー: ${(e as Error).message}`;
+  }
+
+  return `ディレクトリ作成: ${inputPath}`;
+}
+
 // ========================================================
 // Anthropic API に渡す tools スキーマ
 // ========================================================
@@ -278,6 +361,73 @@ export const TOOL_SCHEMAS = [
       required: ["pattern"],
     },
   },
+  {
+    name: "write_file",
+    description:
+      "ファイルを新規作成または全体を上書きする。" +
+      "親ディレクトリが存在しない場合は自動作成する。" +
+      "既存ファイルは確認なしで上書きされるため、edit_file で部分変更できる場合はそちらを優先すること。",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "書き込み先のパス（ルートからの相対パス）",
+        },
+        content: {
+          type: "string",
+          description: "書き込むファイルの内容（全体）",
+        },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "edit_file",
+    description:
+      "ファイルの指定行範囲を新しい内容で置換する。" +
+      "search_code や read_file で行番号を確認してから呼ぶこと。" +
+      "ファイル全体を書き換えたい場合は write_file を使うこと。",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "編集するファイルのパス（ルートからの相対パス）",
+        },
+        start_line: {
+          type: "integer",
+          description: "置換開始行番号（1始まり、含む）",
+        },
+        end_line: {
+          type: "integer",
+          description: "置換終了行番号（1始まり、含む）",
+        },
+        new_content: {
+          type: "string",
+          description: "置換後の内容。複数行の場合は改行文字 \\n を含む文字列",
+        },
+      },
+      required: ["path", "start_line", "end_line", "new_content"],
+    },
+  },
+  {
+    name: "create_directory",
+    description:
+      "ディレクトリを作成する。親ディレクトリが存在しない場合も再帰的に作成する。" +
+      "write_file は親ディレクトリを自動作成するため、" +
+      "このツールは空ディレクトリを明示的に作りたい場合に使う。",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: {
+          type: "string",
+          description: "作成するディレクトリのパス（ルートからの相対パス）",
+        },
+      },
+      required: ["path"],
+    },
+  },
 ] as const;
 
 // ========================================================
@@ -302,6 +452,20 @@ export function dispatch(toolName: string, toolInput: ToolInput): string {
           toolInput.pattern as string,
           (toolInput.path as string) ?? "."
         );
+      case "write_file":
+        return writeFile(
+          toolInput.path as string,
+          toolInput.content as string
+        );
+      case "edit_file":
+        return editFile(
+          toolInput.path as string,
+          toolInput.start_line as number,
+          toolInput.end_line as number,
+          toolInput.new_content as string
+        );
+      case "create_directory":
+        return createDirectory(toolInput.path as string);
       default:
         return `エラー: 未知のツール '${toolName}'`;
     }
