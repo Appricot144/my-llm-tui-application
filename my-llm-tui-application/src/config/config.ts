@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 
-export type ProviderType = "anthropic" | "openai-compatible";
+export type ProviderType = "anthropic" | "openai-compatible" | "bedrock-compatible";
 
 export interface AppConfig {
   provider: ProviderType;

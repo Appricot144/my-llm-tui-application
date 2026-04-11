@@ -205,12 +205,14 @@ describe("OpenAICompatibleProvider", () => {
   });
 
   describe("streamMessage", () => {
+    let mockFetch: ReturnType<typeof vi.spyOn>;
+
     beforeEach(() => {
-      vi.stubGlobal("fetch", vi.fn());
+      mockFetch = vi.spyOn(globalThis, "fetch");
     });
 
     afterEach(() => {
-      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
     });
 
     function createSSEStream(events: string[]): ReadableStream<Uint8Array> {
@@ -233,7 +235,7 @@ describe("OpenAICompatibleProvider", () => {
         "data: [DONE]\n\n",
       ];
 
-      vi.mocked(fetch).mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         body: createSSEStream(sseEvents),
       } as unknown as Response);
@@ -264,7 +266,7 @@ describe("OpenAICompatibleProvider", () => {
         "data: [DONE]\n\n",
       ];
 
-      vi.mocked(fetch).mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         body: createSSEStream(sseEvents),
       } as unknown as Response);
@@ -275,7 +277,7 @@ describe("OpenAICompatibleProvider", () => {
         () => {}
       );
 
-      expect(fetch).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
         "https://api.example.com/v1/chat/completions",
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -291,7 +293,7 @@ describe("OpenAICompatibleProvider", () => {
         "data: [DONE]\n\n",
       ];
 
-      vi.mocked(fetch).mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         body: createSSEStream(sseEvents),
       } as unknown as Response);
@@ -305,7 +307,7 @@ describe("OpenAICompatibleProvider", () => {
         () => {}
       );
 
-      expect(fetch).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
@@ -316,7 +318,7 @@ describe("OpenAICompatibleProvider", () => {
     });
 
     it("HTTP エラーの場合は例外をスローすること", async () => {
-      vi.mocked(fetch).mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: false,
         status: 401,
         text: async () => "Unauthorized",
@@ -338,7 +340,7 @@ describe("OpenAICompatibleProvider", () => {
         "data: [DONE]\n\n",
       ];
 
-      vi.mocked(fetch).mockResolvedValue({
+      mockFetch.mockResolvedValue({
         ok: true,
         body: createSSEStream(sseEvents),
       } as unknown as Response);
