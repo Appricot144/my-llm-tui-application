@@ -86,51 +86,105 @@ Coding・Debug・Review モードで LLM が使用できるツール：
 
 設定ファイルがない場合は Anthropic のデフォルト設定（ANTHROPIC_API_KEY 環境変数）が使われます。
 
-### 2. パターン別の設定例
+### 2. プロバイダー仕様
 
-Anthropic（デフォルトと同じ）
-```
+#### `anthropic`
+
+Anthropic SDK を使用して Anthropic API（またはその互換エンドポイント）と通信します。
+
+| 項目 | 内容 |
+|---|---|
+| HTTP クライアント | Anthropic SDK |
+| エンドポイント | `{baseUrl}/v1/messages`（`baseUrl` 省略時は公式 API）|
+| リクエスト形式 | Anthropic Messages API 形式 |
+| 認証 | SDK が `apiKey` を `x-api-key` / `Authorization` ヘッダーとして自動付与 |
+| ストリーミング | SDK 経由（対応）|
+| ツール使用 | デフォルト有効（`toolUse: false` で無効化）|
+
+```json
 {
   "provider": "anthropic",
   "model": "claude-sonnet-4-20250514",
   "apiKey": "${ANTHROPIC_API_KEY}"
 }
 ```
-Anthropic 互換プロキシ（baseUrl だけ変える）
-```
-{
-  "provider": "anthropic",
-  "baseUrl": "https://your-proxy.example.com",
-  "model": "claude-sonnet-v2",
-  "apiKey": "${YOUR_API_KEY}",
-  "headers": {
-    "X-Custom-Header": "value"
-  }
-}
-```
-OpenAI 互換（Bedrock wrapper 等）
-```
+
+---
+
+#### `openai-compatible`
+
+OpenAI Chat Completions API と互換のエンドポイントに `fetch` で直接通信します。
+
+| 項目 | 内容 |
+|---|---|
+| HTTP クライアント | fetch |
+| エンドポイント | `{baseUrl}/v1/chat/completions` |
+| リクエスト形式 | OpenAI Chat Completions 形式 |
+| 認証 | `Authorization: Bearer {apiKey}` を自動付与。`headers` で上書き可 |
+| ストリーミング | SSE（`stream: true`、`stream_options.include_usage: true`）|
+| ツール使用 | デフォルト無効（`toolUse: true` で有効化）|
+
+```json
 {
   "provider": "openai-compatible",
-  "baseUrl": "https://your-bedrock-wrapper.example.com",
-  "model": "your-custom-model",
+  "baseUrl": "https://your-openai-compatible-proxy.example.com",
+  "model": "your-model-name",
   "apiKey": "${YOUR_API_KEY}",
-  "headers": {
-    "X-Service-Token": "${SERVICE_TOKEN}"
-  },
   "toolUse": false
 }
 ```
-### 3. 設定項目一覧
 
-|キー|必須|説明|
+---
+
+#### `bedrock-compatible`
+
+Bedrock 形式のリクエストを受け付ける独自プロキシ向けプロバイダーです。
+`fetch` で `baseUrl` にそのまま POST します（パスの付加なし）。
+
+| 項目 | 内容 |
+|---|---|
+| HTTP クライアント | fetch |
+| エンドポイント | `baseUrl` をそのまま使用（パスを付加しない）|
+| リクエスト形式 | Bedrock 形式（`anthropic_version: "bedrock-2023-05-31"`）|
+| 認証 | `headers` で完全制御（`Content-Type: application/json` のみ自動付与）|
+| ストリーミング | レスポンスの `Content-Type` で自動判別: `text/event-stream` → Anthropic SSE形式、それ以外 → JSON 一括レスポンス |
+| ツール使用 | デフォルト有効（`toolUse: false` で無効化）。Bedrock 形式のツール定義を使用 |
+
+```json
+{
+  "provider": "bedrock-compatible",
+  "model": "claude-sonnet-4-6",
+  "baseUrl": "https://your-proxy.example.com/bedrock/model/claude-sonnet-4-6/invoke",
+  "headers": {
+    "Authorization": "Bearer ${YOUR_API_KEY} default"
+  }
+}
+```
+
+---
+
+### 3. プロバイダー比較
+
+| | `anthropic` | `openai-compatible` | `bedrock-compatible` |
+|---|---|---|---|
+| HTTP クライアント | Anthropic SDK | fetch | fetch |
+| エンドポイント | `{baseUrl}/v1/messages` | `{baseUrl}/v1/chat/completions` | `baseUrl` そのまま |
+| リクエスト形式 | Anthropic | OpenAI | Bedrock |
+| 認証制御 | SDK が自動付与 | `apiKey` + `headers` | `headers` で完全制御 |
+| ツール使用（デフォルト）| 有効 | 無効 | 有効 |
+
+---
+
+### 4. 設定項目一覧
+
+| キー | 必須 | 説明 |
 |---|---|---|
-| provider | ✓ |"anthropic" または "openai-compatible" |
-| model    | ✓ | モデル名（例: "claude-sonnet-4-20250514"） |
-| baseUrl  | openai-compatible は必須 | カスタムエンドポイント URL |
-| apiKey   | — | API キー。省略時は SDK デフォルト（環境変数）を使用 |
-| headers  | — | リクエストに追加するカスタムヘッダー（任意の数）|
-| toolUse  | — | ツール使用の有効/無効。省略時: anthropic=true、openai-compatible=false |
+| `provider` | ✓ | `"anthropic"` / `"openai-compatible"` / `"bedrock-compatible"` |
+| `model` | ✓ | モデル名（例: `"claude-sonnet-4-20250514"`）|
+| `baseUrl` | `openai-compatible` / `bedrock-compatible` は必須 | エンドポイント URL |
+| `apiKey` | — | API キー。省略時は SDK デフォルト（環境変数）を使用 |
+| `headers` | — | リクエストに追加するカスタムヘッダー（任意の数）|
+| `toolUse` | — | ツール使用の有効/無効。省略時: `anthropic`=true、`openai-compatible`=false、`bedrock-compatible`=true |
 
 ### 4. 環境変数参照
 
