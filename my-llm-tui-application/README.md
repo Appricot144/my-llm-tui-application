@@ -90,16 +90,19 @@ Coding・Debug・Review モードで LLM が使用できるツール：
 
 #### `anthropic`
 
-Anthropic SDK を使用して Anthropic API（またはその互換エンドポイント）と通信します。
+Anthropic SDK を使用して Anthropic API（または Anthropic API 互換エンドポイント）と通信します。
 
 | 項目 | 内容 |
 |---|---|
 | HTTP クライアント | Anthropic SDK |
 | エンドポイント | `{baseUrl}/v1/messages`（`baseUrl` 省略時は公式 API）|
 | リクエスト形式 | Anthropic Messages API 形式 |
-| 認証 | SDK が `apiKey` を `x-api-key` / `Authorization` ヘッダーとして自動付与 |
+| 認証 | SDK が `apiKey` を `x-api-key` ヘッダーとして自動付与。`headers` は無視される |
 | ストリーミング | SDK 経由（対応）|
 | ツール使用 | デフォルト有効（`toolUse: false` で無効化）|
+
+> **注意**: `config.json` の `headers` は `anthropic` プロバイダーでは使用されません。
+> 認証は `apiKey`（または環境変数 `ANTHROPIC_API_KEY`）で行い、SDK がヘッダーを管理します。
 
 ```json
 {
@@ -170,7 +173,7 @@ Bedrock 形式のリクエストを受け付ける独自プロキシ向けプロ
 | HTTP クライアント | Anthropic SDK | fetch | fetch |
 | エンドポイント | `{baseUrl}/v1/messages` | `{baseUrl}/v1/chat/completions` | `baseUrl` そのまま |
 | リクエスト形式 | Anthropic | OpenAI | Bedrock |
-| 認証制御 | SDK が自動付与 | `apiKey` + `headers` | `headers` で完全制御 |
+| 認証制御 | SDK が `x-api-key` を自動付与（`headers` は無視） | `apiKey` + `headers` | `headers` で完全制御 |
 | ツール使用（デフォルト）| 有効 | 無効 | 有効 |
 
 ---
@@ -182,8 +185,8 @@ Bedrock 形式のリクエストを受け付ける独自プロキシ向けプロ
 | `provider` | ✓ | `"anthropic"` / `"openai-compatible"` / `"bedrock-compatible"` |
 | `model` | ✓ | モデル名（例: `"claude-sonnet-4-20250514"`）|
 | `baseUrl` | `openai-compatible` / `bedrock-compatible` は必須 | エンドポイント URL |
-| `apiKey` | — | API キー。省略時は SDK デフォルト（環境変数）を使用 |
-| `headers` | — | リクエストに追加するカスタムヘッダー（任意の数）|
+| `apiKey` | `anthropic` は必須（省略時は `ANTHROPIC_API_KEY` 環境変数で代替） | API キー |
+| `headers` | — | カスタムヘッダー。`openai-compatible` / `bedrock-compatible` のみ有効。`anthropic` では無視される |
 | `toolUse` | — | ツール使用の有効/無効。省略時: `anthropic`=true、`openai-compatible`=false、`bedrock-compatible`=true |
 
 ### 4. 環境変数参照
