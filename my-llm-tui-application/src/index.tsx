@@ -93,6 +93,10 @@ function App() {
       >
         <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
         <text fg="#666666"> | {MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
+        <text fg="#aaaaaa"> | </text>
+        <text fg="#81c784">{appConfig.provider}</text>
+        <text fg="#aaaaaa"> / </text>
+        <text fg="#ffb74d">{appConfig.model}</text>
       </box>
       <MessageList messages={messages} loading={loading} />
       <box
