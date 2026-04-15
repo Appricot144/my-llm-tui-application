@@ -12,12 +12,11 @@ export class AnthropicProvider implements LLMProvider {
   readonly supportsTools: boolean;
 
   constructor(config: AppConfig) {
+    // anthropic プロバイダーでは SDK が認証ヘッダーを管理するため
+    // config.headers は渡さない（openai-compatible / bedrock-compatible 向けの設定を無視する）
     this.client = new Anthropic({
       ...(config.apiKey && { apiKey: config.apiKey }),
       ...(config.baseUrl && { baseURL: config.baseUrl }),
-      ...(config.headers && Object.keys(config.headers).length > 0 && {
-        defaultHeaders: config.headers,
-      }),
     });
     this.supportsTools = config.toolUse ?? true;
   }

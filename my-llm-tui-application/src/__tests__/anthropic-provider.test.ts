@@ -13,9 +13,14 @@ const mockStream = {
 };
 const mockMessagesStream = vi.fn(() => mockStream);
 
+let lastConstructorOptions: Record<string, unknown> = {};
+
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class MockAnthropic {
     messages = { stream: mockMessagesStream };
+    constructor(options: Record<string, unknown> = {}) {
+      lastConstructorOptions = options;
+    }
   },
 }));
 
@@ -35,6 +40,7 @@ describe("AnthropicProvider", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    lastConstructorOptions = {};
   });
 
   it("supportsTools はデフォルトで true であること", () => {
@@ -45,6 +51,42 @@ describe("AnthropicProvider", () => {
   it("toolUse: false の場合 supportsTools が false になること", () => {
     const provider = new AnthropicProvider({ ...baseConfig, toolUse: false });
     expect(provider.supportsTools).toBe(false);
+  });
+
+  describe("コンストラクタ — SDK への引数", () => {
+    it("apiKey を SDK に渡すこと", () => {
+      new AnthropicProvider(baseConfig);
+      expect(lastConstructorOptions["apiKey"]).toBe("test-api-key");
+    });
+
+    it("baseUrl を SDK の baseURL に渡すこと", () => {
+      new AnthropicProvider({ ...baseConfig, baseUrl: "https://proxy.example.com" });
+      expect(lastConstructorOptions["baseURL"]).toBe("https://proxy.example.com");
+    });
+
+    it("baseUrl が未指定の場合 baseURL を渡さないこと", () => {
+      new AnthropicProvider(baseConfig);
+      expect(lastConstructorOptions["baseURL"]).toBeUndefined();
+    });
+
+    it("config.headers が指定されていても SDK に defaultHeaders を渡さないこと", () => {
+      new AnthropicProvider({
+        ...baseConfig,
+        headers: { Authorization: "Bearer custom-token" },
+      });
+      expect(lastConstructorOptions["defaultHeaders"]).toBeUndefined();
+    });
+
+    it("config.headers に何が含まれていても SDK に defaultHeaders を渡さないこと", () => {
+      new AnthropicProvider({
+        ...baseConfig,
+        headers: {
+          Authorization: "Bearer dummy default",
+          "X-Custom-Header": "value",
+        },
+      });
+      expect(lastConstructorOptions["defaultHeaders"]).toBeUndefined();
+    });
   });
 
   describe("streamMessage", () => {
