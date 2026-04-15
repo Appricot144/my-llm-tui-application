@@ -12,6 +12,7 @@ import {
   createDirectory,
   dispatch,
 } from "../tools/tools.ts";
+import { resetSecurity } from "../security/security.ts";
 
 // テスト用の一時ディレクトリを作成
 function createTempProject(): string {
@@ -28,6 +29,7 @@ describe("tools", () => {
 
   beforeEach(() => {
     tmpDir = createTempProject();
+    resetSecurity();
     setRoot(tmpDir);
   });
 

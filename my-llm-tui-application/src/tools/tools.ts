@@ -1,40 +1,30 @@
 /**
  * tools.ts — ツール定義 + Executor
  *
- * セキュリティ境界はここに集約する。
- * 後から security.ts に切り出して差し替え可能。
+ * セキュリティ境界は src/security/security.ts に集約している。
  */
 
 import fs from "fs";
 import path from "path";
+import {
+  setRoot as _setRoot,
+  validatePath,
+  getAllowedRoot,
+} from "../security/security.ts";
 
 // ========================================================
-// 設定（最低限のセキュリティ境界）
+// 設定
 // ========================================================
 
-let allowedRoot: string | null = null; // agent.ts から setRoot() で設定する
-const MAX_FILE_LINES = 500;            // 一度に読む最大行数（拡張点: context.ts へ移動）
-const MAX_SEARCH_RESULTS = 20;         // grep の最大マッチ数
+const MAX_FILE_LINES = 500;    // 一度に読む最大行数
+const MAX_SEARCH_RESULTS = 20; // grep の最大マッチ数
 
 const IGNORE_DIRS = new Set([".git", "__pycache__", "node_modules", ".venv", "dist", "build"]);
 const SKIP_EXTENSIONS = new Set([".pyc", ".lock", ".png", ".jpg", ".svg", ".woff", ".ttf"]);
 
+/** セキュリティモジュールへの委譲（後方互換のため re-export） */
 export function setRoot(rootPath: string): void {
-  allowedRoot = fs.realpathSync(path.resolve(rootPath));
-}
-
-/**
- * パストラバーサル防止。allowedRoot 外へのアクセスを拒否する。
- * （拡張点: security.ts に移動して allowlist/denylist を追加できる）
- */
-function validatePath(inputPath: string): string {
-  if (!allowedRoot) throw new Error("setRoot() が呼ばれていません");
-
-  const resolved = path.resolve(allowedRoot, inputPath);
-  if (!resolved.startsWith(allowedRoot + path.sep) && resolved !== allowedRoot) {
-    throw new Error(`アクセス拒否: ${inputPath} は許可されたディレクトリ外です`);
-  }
-  return resolved;
+  _setRoot(rootPath);
 }
 
 // ========================================================
@@ -163,7 +153,7 @@ export function searchCode(pattern: string, inputPath: string = "."): string {
     } catch {
       return;
     }
-    const rel = path.relative(allowedRoot!, filePath);
+    const rel = path.relative(getAllowedRoot()!, filePath);
     for (let i = 0; i < fileLines.length; i++) {
       if (regex.test(fileLines[i]!)) {
         results.push(`${rel}:${i + 1}: ${fileLines[i]!.trimEnd()}`);

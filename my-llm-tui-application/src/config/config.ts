@@ -4,6 +4,13 @@ import * as os from "os";
 
 export type ProviderType = "anthropic" | "openai-compatible" | "bedrock-compatible";
 
+export interface SecurityConfig {
+  /** allowedRoot からの相対パスプレフィックス。一致したらアクセス拒否（denylist が allowlist より優先） */
+  denylist?: string[];
+  /** 指定がある場合、このリストに含まれるパスのみ許可（省略時は全許可） */
+  allowlist?: string[];
+}
+
 export interface AppConfig {
   provider: ProviderType;
   baseUrl?: string;
@@ -11,6 +18,7 @@ export interface AppConfig {
   model: string;
   headers?: Record<string, string>;
   toolUse?: boolean;
+  security?: SecurityConfig;
 }
 
 const DEFAULT_CONFIG: AppConfig = {

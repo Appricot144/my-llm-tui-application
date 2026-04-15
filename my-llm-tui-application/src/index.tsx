@@ -17,14 +17,28 @@ const PROJECT_ROOT = process.cwd();
 const appConfig = loadConfig();
 const provider: LLMProvider = createProvider(appConfig);
 
+export interface PendingConfirm {
+  toolName: string;
+  input: Record<string, unknown>;
+  resolve: (confirmed: boolean) => void;
+}
+
 function App() {
   const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
 
   const handleModeChange = useCallback(() => {
     setMode((prev) => nextMode(prev));
   }, []);
+
+  const handleConfirm = useCallback((confirmed: boolean) => {
+    if (pendingConfirm) {
+      pendingConfirm.resolve(confirmed);
+      setPendingConfirm(null);
+    }
+  }, [pendingConfirm]);
 
   const handleSubmit = async (text: string) => {
     addUserMessage(text);
@@ -43,6 +57,7 @@ function App() {
         conversationHistory,
         projectRoot: PROJECT_ROOT,
         mode,
+        securityConfig: appConfig.security,
         onTextDelta: (fullText) => {
           updateLastAssistantMessage(fullText);
         },
@@ -50,6 +65,10 @@ function App() {
           const inputPreview = JSON.stringify(toolInput).slice(0, 80);
           updateLastAssistantMessage(`[ツール実行中] ${toolName}(${inputPreview})\n`);
         },
+        onToolConfirm: (toolName, toolInput) =>
+          new Promise<boolean>((resolve) => {
+            setPendingConfirm({ toolName, input: toolInput, resolve });
+          }),
       });
 
       setTotalTokenUsage((prev) => addTokenUsage(prev, {
@@ -89,6 +108,8 @@ function App() {
         onSubmit={handleSubmit}
         onModeChange={handleModeChange}
         disabled={loading}
+        pendingConfirm={pendingConfirm}
+        onConfirm={handleConfirm}
       />
     </box>
   );

@@ -7,8 +7,10 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
+import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
+import type { SecurityConfig } from "../config/config.ts";
 import type { LLMProvider, NormalizedContentBlock } from "../providers/types.ts";
 
 // ========================================================
@@ -17,6 +19,9 @@ import type { LLMProvider, NormalizedContentBlock } from "../providers/types.ts"
 
 const MAX_ITERATIONS = 20;
 const MAX_TOKENS = 4096;
+
+/** 実行前にユーザー確認が必要なツール */
+const WRITE_TOOLS = new Set(["write_file", "edit_file", "create_directory"]);
 
 // ========================================================
 // 型定義
@@ -35,10 +40,14 @@ export interface RunOptions {
   projectRoot: string;
   /** エージェントのモード */
   mode?: Mode;
+  /** セキュリティポリシー設定 */
+  securityConfig?: SecurityConfig;
   /** テキスト生成時のコールバック（ストリーミング用） */
   onTextDelta?: (fullText: string) => void;
   /** ツール呼び出し時のコールバック（UI表示用） */
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void;
+  /** 書き込みツール実行前の承認コールバック。false を返すとキャンセル */
+  onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>;
 }
 
 export interface RunResult {
@@ -61,12 +70,15 @@ export async function run({
   conversationHistory,
   projectRoot,
   mode = "coding",
+  securityConfig,
   onTextDelta,
   onToolUse,
+  onToolConfirm,
 }: RunOptions): Promise<RunResult> {
   const useTools = mode !== "chat" && provider.supportsTools;
   if (useTools) {
     setRoot(projectRoot);
+    setSecurityConfig(securityConfig ?? {});
   }
 
   const systemPrompt = getPrompt(mode);
@@ -118,7 +130,7 @@ export async function run({
     }
 
     if (response.stopReason === "tool_use") {
-      const toolResults = handleToolUse(response.content, onToolUse);
+      const toolResults = await handleToolUse(response.content, onToolUse, onToolConfirm);
       newMessages.push({ role: "user", content: toolResults });
       continue;
     }
@@ -137,10 +149,11 @@ export async function run({
 // 内部ヘルパー
 // ========================================================
 
-function handleToolUse(
+async function handleToolUse(
   contentBlocks: NormalizedContentBlock[],
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
-): Anthropic.Messages.ToolResultBlockParam[] {
+  onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>,
+): Promise<Anthropic.Messages.ToolResultBlockParam[]> {
   const results: Anthropic.Messages.ToolResultBlockParam[] = [];
 
   for (const block of contentBlocks) {
@@ -150,6 +163,19 @@ function handleToolUse(
     const toolInput = block.input;
 
     onToolUse?.(toolName, toolInput);
+
+    // 書き込みツールは実行前にユーザー確認を取る
+    if (WRITE_TOOLS.has(toolName) && onToolConfirm) {
+      const confirmed = await onToolConfirm(toolName, toolInput);
+      if (!confirmed) {
+        results.push({
+          type: "tool_result",
+          tool_use_id: block.id,
+          content: "ユーザーによりキャンセルされました",
+        });
+        continue;
+      }
+    }
 
     const output = dispatch(toolName, toolInput);
 
