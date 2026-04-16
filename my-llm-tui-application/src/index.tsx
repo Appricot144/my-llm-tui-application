@@ -90,6 +90,8 @@ function App() {
         border={["bottom"]}
         borderColor="#333333"
         paddingLeft={1}
+        flexShrink={0}
+        overflow="hidden"
       >
         <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
         <text fg="#666666"> | {MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>

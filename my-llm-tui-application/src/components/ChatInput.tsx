@@ -1,7 +1,6 @@
-import { useState, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import { useKeyboard } from "@opentui/react";
-import type { KeyEvent } from "@opentui/core";
-import { isPrintableCharacter } from "../utils/inputHelper.ts";
+import type { KeyEvent, InputRenderable } from "@opentui/core";
 import type { PendingConfirm } from "../index.tsx";
 
 interface ChatInputProps {
@@ -19,7 +18,7 @@ export function ChatInput({
   pendingConfirm,
   onConfirm,
 }: ChatInputProps) {
-  const [value, setValue] = useState("");
+  const inputRef = useRef<InputRenderable>(null);
 
   const handleKey = useCallback((key: KeyEvent) => {
     // 承認モード: Y/Enter で承認、N で拒否
@@ -32,48 +31,24 @@ export function ChatInput({
       return;
     }
 
-    if (disabled) return;
-
     // Shift+Tab: モード切替
     if (key.name === "tab" && key.shift) {
       onModeChange();
-      return;
     }
-
-    if (key.name === "return") {
-      const trimmed = value.trim();
-      if (trimmed.length > 0) {
-        onSubmit(trimmed);
-        setValue("");
-      }
-      return;
-    }
-
-    if (key.name === "backspace") {
-      setValue((prev) => {
-        if (prev.length === 0) return prev;
-        // サロゲートペアを考慮して末尾の1文字を削除
-        const chars = [...prev];
-        chars.pop();
-        return chars.join("");
-      });
-      return;
-    }
-
-    // Ctrl+U: 行をクリア
-    if (key.name === "u" && key.ctrl) {
-      setValue("");
-      return;
-    }
-
-    // 印字可能な文字を入力に追加
-    const char = key.sequence;
-    if (char && isPrintableCharacter(char)) {
-      setValue((prev) => prev + char);
-    }
-  }, [disabled, value, onSubmit, onModeChange, pendingConfirm, onConfirm]);
+  }, [pendingConfirm, onConfirm, onModeChange]);
 
   useKeyboard(handleKey);
+
+  const handleSubmit = useCallback(() => {
+    const text = inputRef.current?.value ?? "";
+    const trimmed = text.trim();
+    if (trimmed.length > 0) {
+      onSubmit(trimmed);
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
+    }
+  }, [onSubmit]);
 
   // 承認モードの表示
   if (pendingConfirm) {
@@ -86,6 +61,7 @@ export function ChatInput({
         borderColor="#f4a261"
         paddingLeft={1}
         paddingRight={1}
+        flexShrink={0}
       >
         <text fg="#f4a261" attributes={1}>
           {`[承認待ち] ${pendingConfirm.toolName}(${inputPreview})`}
@@ -100,9 +76,6 @@ export function ChatInput({
     );
   }
 
-  const displayValue = value || (disabled ? "応答待ち..." : "メッセージを入力...");
-  const isPlaceholder = value.length === 0;
-
   return (
     <box
       flexDirection="row"
@@ -111,11 +84,21 @@ export function ChatInput({
       borderColor={disabled ? "#555555" : "#4fc3f7"}
       paddingLeft={1}
       paddingRight={1}
+      flexShrink={0}
     >
       <text fg="#4fc3f7" attributes={1}>{">"} </text>
-      <text fg={isPlaceholder ? "#666666" : "#ffffff"}>
-        {displayValue}{!disabled && !isPlaceholder ? "█" : ""}
-      </text>
+      <input
+        ref={inputRef}
+        focused={!disabled}
+        placeholder={disabled ? "応答待ち..." : "メッセージを入力..."}
+        placeholderColor="#666666"
+        textColor="#ffffff"
+        // ライブラリの型定義が TextareaOptions と InputProps で onSubmit の型が競合するためキャスト
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onSubmit={handleSubmit as any}
+        keyBindings={[{ name: "u", ctrl: true, action: "delete-line" }]}
+        flexGrow={1}
+      />
     </box>
   );
 }
