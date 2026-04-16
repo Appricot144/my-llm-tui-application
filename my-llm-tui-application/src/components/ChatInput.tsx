@@ -96,7 +96,11 @@ export function ChatInput({
         // ライブラリの型定義が TextareaOptions と InputProps で onSubmit の型が競合するためキャスト
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onSubmit={handleSubmit as any}
-        keyBindings={[{ name: "u", ctrl: true, action: "delete-line" }]}
+        keyBindings={[
+          { name: "return", action: "submit" },
+          { name: "linefeed", action: "submit" },
+          { name: "u", ctrl: true, action: "delete-line" },
+        ]}
         flexGrow={1}
       />
     </box>
