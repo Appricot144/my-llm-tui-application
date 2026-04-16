@@ -3,6 +3,7 @@ import type { AppConfig } from "../config/config.ts";
 import type {
   LLMProvider,
   LLMRequestParams,
+  MessageParam,
   NormalizedContentBlock,
   NormalizedResponse,
 } from "./types.ts";
@@ -29,7 +30,7 @@ export class AnthropicProvider implements LLMProvider {
       model: params.model,
       max_tokens: params.maxTokens,
       system: params.system,
-      messages: params.messages,
+      messages: toAnthropicMessages(params.messages),
     };
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools as unknown as Anthropic.Messages.Tool[];
@@ -54,6 +55,17 @@ export class AnthropicProvider implements LLMProvider {
       },
     };
   }
+}
+
+/**
+ * 独自の MessageParam を Anthropic SDK の MessageParam に変換する。
+ * 両者は構造的に互換性があるため、型キャストで対応する。
+ * Anthropic 固有のブロック型（image など）は本アプリでは使用しない。
+ */
+function toAnthropicMessages(
+  messages: MessageParam[]
+): Anthropic.Messages.MessageParam[] {
+  return messages as unknown as Anthropic.Messages.MessageParam[];
 }
 
 function mapStopReason(

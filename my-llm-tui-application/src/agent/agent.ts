@@ -5,13 +5,18 @@
  * ストリーミング対応で、テキスト生成をリアルタイムにコールバックで通知する。
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
 import type { SecurityConfig } from "../config/config.ts";
-import type { LLMProvider, NormalizedContentBlock } from "../providers/types.ts";
+import type {
+  LLMProvider,
+  MessageParam,
+  ContentBlockParam,
+  ToolResultBlockParam,
+  NormalizedContentBlock,
+} from "../providers/types.ts";
 
 // ========================================================
 // 定数
@@ -35,7 +40,7 @@ export interface RunOptions {
   /** 今回のユーザーメッセージ */
   userMessage: string;
   /** これまでの会話履歴（API形式） */
-  conversationHistory: Anthropic.Messages.MessageParam[];
+  conversationHistory: MessageParam[];
   /** 読み込みを許可するルートディレクトリ */
   projectRoot: string;
   /** エージェントのモード */
@@ -54,7 +59,7 @@ export interface RunResult {
   /** 最終的な LLM の回答テキスト */
   text: string;
   /** エージェントループ中の全メッセージ（履歴更新用） */
-  newMessages: Anthropic.Messages.MessageParam[];
+  newMessages: MessageParam[];
   /** 今回のリクエスト全体のトークン使用量（ループ全イテレーション累計） */
   tokenUsage: TokenUsage;
 }
@@ -84,12 +89,12 @@ export async function run({
   const systemPrompt = getPrompt(mode);
 
   // エージェントループ中に追加されるメッセージ
-  const newMessages: Anthropic.Messages.MessageParam[] = [
+  const newMessages: MessageParam[] = [
     { role: "user", content: userMessage },
   ];
 
   // API に渡す全メッセージ = 過去の履歴 + 今回の新規メッセージ
-  const allMessages = (): Anthropic.Messages.MessageParam[] => [
+  const allMessages = (): MessageParam[] => [
     ...conversationHistory,
     ...newMessages,
   ];
@@ -118,7 +123,7 @@ export async function run({
     // アシスタントの返答を履歴に追加
     newMessages.push({
       role: "assistant",
-      content: response.content as unknown as Anthropic.Messages.ContentBlockParam[],
+      content: response.content as ContentBlockParam[],
     });
 
     if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
@@ -153,8 +158,8 @@ async function handleToolUse(
   contentBlocks: NormalizedContentBlock[],
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
   onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>,
-): Promise<Anthropic.Messages.ToolResultBlockParam[]> {
-  const results: Anthropic.Messages.ToolResultBlockParam[] = [];
+): Promise<ToolResultBlockParam[]> {
+  const results: ToolResultBlockParam[] = [];
 
   for (const block of contentBlocks) {
     if (block.type !== "tool_use") continue;

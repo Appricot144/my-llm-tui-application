@@ -1,6 +1,38 @@
-import type Anthropic from "@anthropic-ai/sdk";
+// ========================================================
+// プロバイダー非依存のメッセージ型
+// ========================================================
 
-export type MessageParam = Anthropic.Messages.MessageParam;
+export interface TextBlockParam {
+  type: "text";
+  text: string;
+}
+
+export interface ToolUseBlockParam {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+export interface ToolResultBlockParam {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string | TextBlockParam[];
+}
+
+export type ContentBlockParam =
+  | TextBlockParam
+  | ToolUseBlockParam
+  | ToolResultBlockParam;
+
+export interface MessageParam {
+  role: "user" | "assistant";
+  content: string | ContentBlockParam[];
+}
+
+// ========================================================
+// ツールスキーマ
+// ========================================================
 
 export interface ToolSchema {
   name: string;
@@ -11,6 +43,10 @@ export interface ToolSchema {
     required?: string[];
   };
 }
+
+// ========================================================
+// プロバイダー共通レスポンス型
+// ========================================================
 
 export interface NormalizedTextBlock {
   type: "text";
@@ -31,6 +67,10 @@ export interface NormalizedResponse {
   stopReason: "end_turn" | "tool_use" | "max_tokens";
   usage: { inputTokens: number; outputTokens: number };
 }
+
+// ========================================================
+// プロバイダーインターフェース
+// ========================================================
 
 export interface LLMRequestParams {
   model: string;

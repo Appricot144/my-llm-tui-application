@@ -1,9 +1,11 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import type { AppConfig } from "../config/config.ts";
 import type {
   LLMProvider,
   LLMRequestParams,
   MessageParam,
+  TextBlockParam,
+  ToolUseBlockParam,
+  ToolResultBlockParam,
   NormalizedContentBlock,
   NormalizedResponse,
   ToolSchema,
@@ -228,7 +230,7 @@ function mapFinishReason(
 }
 
 // ========================================================
-// Anthropic → OpenAI メッセージ変換
+// 独自 MessageParam → OpenAI メッセージ変換
 // ========================================================
 
 export function convertMessages(
@@ -252,14 +254,12 @@ export function convertMessages(
     if (msg.role === "user") {
       for (const block of msg.content) {
         if (block.type === "tool_result") {
-          const tr = block as Anthropic.Messages.ToolResultBlockParam;
+          const tr = block as ToolResultBlockParam;
           const content =
             typeof tr.content === "string"
               ? tr.content
               : Array.isArray(tr.content)
-                ? (tr.content as Anthropic.Messages.TextBlockParam[])
-                    .map((b) => b.text)
-                    .join("")
+                ? (tr.content as TextBlockParam[]).map((b) => b.text).join("")
                 : "";
           result.push({
             role: "tool",
@@ -272,10 +272,10 @@ export function convertMessages(
       }
     } else if (msg.role === "assistant") {
       const textBlocks = msg.content.filter(
-        (b): b is Anthropic.Messages.TextBlock => b.type === "text"
+        (b): b is TextBlockParam => b.type === "text"
       );
       const toolUseBlocks = msg.content.filter(
-        (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use"
+        (b): b is ToolUseBlockParam => b.type === "tool_use"
       );
 
       const text = textBlocks.map((b) => b.text).join("");
@@ -303,7 +303,7 @@ export function convertMessages(
 }
 
 // ========================================================
-// Anthropic ToolSchema → OpenAI tools 変換
+// 独自 ToolSchema → OpenAI tools 変換
 // ========================================================
 
 export function convertTools(tools: ToolSchema[]): OpenAITool[] {
