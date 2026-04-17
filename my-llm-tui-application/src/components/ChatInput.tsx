@@ -1,10 +1,12 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { useKeyboard } from "@opentui/react";
 import type { KeyEvent, InputRenderable } from "@opentui/core";
 import type { PendingConfirm } from "../index.tsx";
+import { isCommandInput, parseCommand } from "../utils/commandParser.ts";
 
 interface ChatInputProps {
   onSubmit: (value: string) => void;
+  onCommand: (name: string, args: string) => void;
   onModeChange: () => void;
   disabled: boolean;
   pendingConfirm?: PendingConfirm | null;
@@ -13,12 +15,14 @@ interface ChatInputProps {
 
 export function ChatInput({
   onSubmit,
+  onCommand,
   onModeChange,
   disabled,
   pendingConfirm,
   onConfirm,
 }: ChatInputProps) {
   const inputRef = useRef<InputRenderable>(null);
+  const [isCommandMode, setIsCommandMode] = useState(false);
 
   const handleKey = useCallback((key: KeyEvent) => {
     // 承認モード: Y/Enter で承認、N で拒否
@@ -34,7 +38,14 @@ export function ChatInput({
     // Shift+Tab: モード切替
     if (key.name === "tab" && key.shift) {
       onModeChange();
+      return;
     }
+
+    // キー入力後に入力値を確認してコマンドモードを更新
+    setTimeout(() => {
+      const value = inputRef.current?.value ?? "";
+      setIsCommandMode(isCommandInput(value));
+    }, 0);
   }, [pendingConfirm, onConfirm, onModeChange]);
 
   useKeyboard(handleKey);
@@ -42,13 +53,20 @@ export function ChatInput({
   const handleSubmit = useCallback(() => {
     const text = inputRef.current?.value ?? "";
     const trimmed = text.trim();
-    if (trimmed.length > 0) {
+    if (trimmed.length === 0) return;
+
+    const parsed = parseCommand(trimmed);
+    if (parsed) {
+      onCommand(parsed.commandName, parsed.args);
+    } else {
       onSubmit(trimmed);
-      if (inputRef.current) {
-        inputRef.current.value = "";
-      }
     }
-  }, [onSubmit]);
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+    setIsCommandMode(false);
+  }, [onSubmit, onCommand]);
 
   // 承認モードの表示
   if (pendingConfirm) {
@@ -76,33 +94,41 @@ export function ChatInput({
     );
   }
 
+  const borderColor = isCommandMode ? "#81c784" : (disabled ? "#555555" : "#4fc3f7");
+  const promptColor = isCommandMode ? "#81c784" : "#4fc3f7";
+
   return (
     <box
-      flexDirection="row"
+      flexDirection="column"
       borderStyle="rounded"
       border={true}
-      borderColor={disabled ? "#555555" : "#4fc3f7"}
+      borderColor={borderColor}
       paddingLeft={1}
       paddingRight={1}
       flexShrink={0}
     >
-      <text fg="#4fc3f7" attributes={1}>{">"} </text>
-      <input
-        ref={inputRef}
-        focused={!disabled}
-        placeholder={disabled ? "応答待ち..." : "メッセージを入力..."}
-        placeholderColor="#666666"
-        textColor="#ffffff"
-        // ライブラリの型定義が TextareaOptions と InputProps で onSubmit の型が競合するためキャスト
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        onSubmit={handleSubmit as any}
-        keyBindings={[
-          { name: "return", action: "submit" },
-          { name: "linefeed", action: "submit" },
-          { name: "u", ctrl: true, action: "delete-line" },
-        ]}
-        flexGrow={1}
-      />
+      <box flexDirection="row">
+        <text fg={promptColor} attributes={1}>{">"} </text>
+        <input
+          ref={inputRef}
+          focused={!disabled}
+          placeholder={disabled ? "応答待ち..." : "メッセージを入力... (/ でコマンドモード)"}
+          placeholderColor="#666666"
+          textColor="#ffffff"
+          // ライブラリの型定義が TextareaOptions と InputProps で onSubmit の型が競合するためキャスト
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onSubmit={handleSubmit as any}
+          keyBindings={[
+            { name: "return", action: "submit" },
+            { name: "linefeed", action: "submit" },
+            { name: "u", ctrl: true, action: "delete-line" },
+          ]}
+          flexGrow={1}
+        />
+      </box>
+      {isCommandMode && (
+        <text fg="#81c784">{"  commands mode ..."}</text>
+      )}
     </box>
   );
 }

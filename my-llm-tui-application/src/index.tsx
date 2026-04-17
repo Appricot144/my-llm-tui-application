@@ -12,6 +12,7 @@ import { createProvider } from "./providers/factory.ts";
 import type { LLMProvider } from "./providers/types.ts";
 import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
+import { executeCommand } from "./commands/registry.ts";
 
 const PROJECT_ROOT = process.cwd();
 const appConfig = loadConfig();
@@ -32,6 +33,13 @@ function App() {
   const handleModeChange = useCallback(() => {
     setMode((prev) => nextMode(prev));
   }, []);
+
+  const handleCommand = useCallback((name: string, args: string) => {
+    const found = executeCommand(name, args);
+    if (!found) {
+      addAssistantMessage(`未知のコマンド: /${name}`);
+    }
+  }, [addAssistantMessage]);
 
   const handleConfirm = useCallback((confirmed: boolean) => {
     if (pendingConfirm) {
@@ -112,6 +120,7 @@ function App() {
       </box>
       <ChatInput
         onSubmit={handleSubmit}
+        onCommand={handleCommand}
         onModeChange={handleModeChange}
         disabled={loading}
         pendingConfirm={pendingConfirm}
