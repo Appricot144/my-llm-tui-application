@@ -100,6 +100,7 @@ export async function run({
   ];
 
   let tokenUsage = createTokenUsage();
+  const fileCache = new Map<string, string>();
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     const response = await provider.streamMessage(
@@ -135,7 +136,7 @@ export async function run({
     }
 
     if (response.stopReason === "tool_use") {
-      const toolResults = await handleToolUse(response.content, onToolUse, onToolConfirm);
+      const toolResults = await handleToolUse(response.content, fileCache, onToolUse, onToolConfirm);
       newMessages.push({ role: "user", content: toolResults });
       continue;
     }
@@ -156,6 +157,7 @@ export async function run({
 
 async function handleToolUse(
   contentBlocks: NormalizedContentBlock[],
+  fileCache: Map<string, string>,
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
   onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>,
 ): Promise<ToolResultBlockParam[]> {
@@ -182,7 +184,21 @@ async function handleToolUse(
       }
     }
 
-    const output = dispatch(toolName, toolInput);
+    // 書き込みツールはキャッシュを全クリアしてから実行
+    if (WRITE_TOOLS.has(toolName)) {
+      fileCache.clear();
+    }
+
+    const cacheKey = buildCacheKey(toolName, toolInput);
+    let output: string;
+    if (cacheKey !== null && fileCache.has(cacheKey)) {
+      output = fileCache.get(cacheKey)!;
+    } else {
+      output = dispatch(toolName, toolInput);
+      if (cacheKey !== null) {
+        fileCache.set(cacheKey, output);
+      }
+    }
 
     results.push({
       type: "tool_result",
@@ -192,6 +208,26 @@ async function handleToolUse(
   }
 
   return results;
+}
+
+/**
+ * 読み取り専用ツールに対してキャッシュキーを生成する。
+ * 書き込みツール（write_file, edit_file, create_directory）は null を返す。
+ */
+export function buildCacheKey(
+  toolName: string,
+  toolInput: Record<string, unknown>
+): string | null {
+  switch (toolName) {
+    case "read_file":
+      return `read_file:${toolInput.path}:${toolInput.start_line ?? ""}:${toolInput.end_line ?? ""}`;
+    case "list_directory":
+      return `list_directory:${toolInput.path ?? "."}`;
+    case "search_code":
+      return `search_code:${toolInput.pattern}:${toolInput.path ?? "."}`;
+    default:
+      return null;
+  }
 }
 
 function extractText(contentBlocks: NormalizedContentBlock[]): string {

@@ -34,6 +34,28 @@ describe("getPrompt", () => {
     expect(prompt).not.toContain("ツール");
   });
 
+  it("非 chat モードのプロンプトに条件付きツール使用の指示が含まれる", () => {
+    for (const mode of ["debug", "review", "coding"] as const) {
+      const prompt = getPrompt(mode);
+      expect(prompt).toContain("必要な場合のみ");
+    }
+  });
+
+  it("非 chat モードのプロンプトに並列ツール呼び出しの指示が含まれる", () => {
+    for (const mode of ["debug", "review", "coding"] as const) {
+      const prompt = getPrompt(mode);
+      expect(prompt).toContain("複数の tool_use をまとめて返してよい");
+    }
+  });
+
+  it("非 chat モードのプロンプトに範囲指定読み込みの指示が含まれる", () => {
+    for (const mode of ["debug", "review", "coding"] as const) {
+      const prompt = getPrompt(mode);
+      expect(prompt).toContain("start_line");
+      expect(prompt).toContain("end_line");
+    }
+  });
+
   it("各モードで異なるプロンプトを返す", () => {
     const chat = getPrompt("chat");
     const debug = getPrompt("debug");
