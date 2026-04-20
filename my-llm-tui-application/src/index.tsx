@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { createCliRenderer, TextAttributes } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useChat } from "./hooks/useChat.ts";
@@ -13,6 +13,8 @@ import type { LLMProvider } from "./providers/types.ts";
 import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
 import { executeCommand } from "./commands/registry.ts";
+import { registerInitCommand } from "./commands/init.ts";
+import { getProjectContext } from "./agent/projectContext.ts";
 
 const PROJECT_ROOT = process.cwd();
 const appConfig = loadConfig();
@@ -29,6 +31,23 @@ function App() {
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+
+  useEffect(() => {
+    registerInitCommand({
+      provider,
+      model: appConfig.model,
+      projectRoot: PROJECT_ROOT,
+      securityConfig: appConfig.security,
+      setLoading,
+      addAssistantMessage,
+      updateLastAssistantMessage,
+      updateTokenUsage: (inputTokens, outputTokens) => {
+        setTotalTokenUsage((prev) =>
+          addTokenUsage(prev, { input_tokens: inputTokens, output_tokens: outputTokens })
+        );
+      },
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleModeChange = useCallback(() => {
     setMode((prev) => nextMode(prev));
@@ -66,6 +85,7 @@ function App() {
         projectRoot: PROJECT_ROOT,
         mode,
         securityConfig: appConfig.security,
+        projectContext: getProjectContext() ?? undefined,
         onTextDelta: (fullText) => {
           updateLastAssistantMessage(fullText);
         },

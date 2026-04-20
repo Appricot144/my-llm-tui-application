@@ -47,6 +47,8 @@ export interface RunOptions {
   mode?: Mode;
   /** セキュリティポリシー設定 */
   securityConfig?: SecurityConfig;
+  /** /init で生成したプロジェクト概要。提供された場合はシステムプロンプトに追記される */
+  projectContext?: string;
   /** テキスト生成時のコールバック（ストリーミング用） */
   onTextDelta?: (fullText: string) => void;
   /** ツール呼び出し時のコールバック（UI表示用） */
@@ -76,6 +78,7 @@ export async function run({
   projectRoot,
   mode = "coding",
   securityConfig,
+  projectContext,
   onTextDelta,
   onToolUse,
   onToolConfirm,
@@ -86,7 +89,10 @@ export async function run({
     setSecurityConfig(securityConfig ?? {});
   }
 
-  const systemPrompt = getPrompt(mode);
+  const basePrompt = getPrompt(mode);
+  const systemPrompt = projectContext
+    ? `${basePrompt}\n\n[プロジェクト概要]\n${projectContext}`
+    : basePrompt;
 
   // エージェントループ中に追加されるメッセージ
   const newMessages: MessageParam[] = [
