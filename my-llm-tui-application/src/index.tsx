@@ -98,15 +98,20 @@ function App() {
         border={["bottom"]}
         borderColor="#333333"
         paddingLeft={1}
+        flexDirection="row"
+        justifyContent="space-between"
         flexShrink={0}
         overflow="hidden"
       >
-        <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
-        <text fg="#666666"> | {MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
-        <text fg="#aaaaaa"> | </text>
-        <text fg="#81c784">{appConfig.provider}</text>
-        <text fg="#aaaaaa"> / </text>
-        <text fg="#ffb74d">{appConfig.model}</text>
+        <box flexDirection="column">
+          <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
+          <text fg="#666666">{MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
+        </box>
+        <box flexDirection="row" alignItems="flex-end">
+          <text fg="#81c784">{appConfig.provider}</text>
+          <text fg="#aaaaaa"> / </text>
+          <text fg="#ffb74d">{appConfig.model}</text>
+        </box>
       </box>
       <MessageList messages={messages} loading={loading} />
       <box

@@ -14,7 +14,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
   const langLabel = language && language !== "text" ? language : "code";
 
   const handleCopy = useCallback(() => {
-    renderer.clipboard.copyToClipboardOSC52(code);
+    renderer.copyToClipboardOSC52(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [renderer, code]);
@@ -34,7 +34,7 @@ export function CodeBlock({ code, language }: CodeBlockProps) {
           }
         </box>
       </box>
-      <box flexDirection="column" paddingLeft={2} paddingRight={2}>
+      <box flexDirection="column" paddingLeft={2} paddingRight={2} backgroundColor="#333333">
         {lines.map((tokens, lineIndex) => (
           <box key={lineIndex} flexDirection="row">
             <text fg="#555555">{String(lineIndex + 1).padStart(3)} </text>

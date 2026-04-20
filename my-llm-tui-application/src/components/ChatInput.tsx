@@ -107,7 +107,7 @@ export function ChatInput({
       paddingRight={1}
       flexShrink={0}
     >
-      <box flexDirection="row">
+      <box flexDirection="row" titleAlignment="right" title="branch">
         <text fg={promptColor} attributes={1}>{">"} </text>
         <input
           ref={inputRef}
