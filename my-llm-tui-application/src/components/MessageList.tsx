@@ -1,6 +1,7 @@
 import type { Message } from "../types.ts";
 import { LoadingSpinner } from "./LoadingSpinner.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
+import { splitUserMessageLines } from "../utils/messageUtils.ts";
 
 interface MessageListProps {
   messages: Message[];
@@ -42,7 +43,7 @@ export function MessageList({ messages, loading }: MessageListProps) {
 }
 
 function UserMessage({ content }: { content: string }) {
-  const lines = content.split("\n");
+  const lines = splitUserMessageLines(content);
   return (
     <box flexDirection="column" marginTop={1}>
       <box flexDirection="row">
