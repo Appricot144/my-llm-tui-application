@@ -1,6 +1,13 @@
-import type { StyleDefinition } from "@opentui/core";
+interface StyleInput {
+  fg?: string;
+  bg?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  dim?: boolean;
+}
 
-export const SYNTAX_STYLE_DEFINITIONS: Record<string, StyleDefinition> = {
+export const SYNTAX_STYLE_DEFINITIONS: Record<string, StyleInput> = {
   "markup.heading":    { fg: "#4fc3f7", bold: true },
   "markup.heading.1":  { fg: "#4fc3f7", bold: true },
   "markup.heading.2":  { fg: "#81c784", bold: true },

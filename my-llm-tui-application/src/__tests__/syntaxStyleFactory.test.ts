@@ -63,24 +63,24 @@ describe("SYNTAX_STYLE_DEFINITIONS", () => {
     });
 
     it("markup.heading.1/2/3 はそれぞれ異なる色を持つ", () => {
-      const h1 = SYNTAX_STYLE_DEFINITIONS["markup.heading.1"].fg;
-      const h2 = SYNTAX_STYLE_DEFINITIONS["markup.heading.2"].fg;
-      const h3 = SYNTAX_STYLE_DEFINITIONS["markup.heading.3"].fg;
+      const h1 = SYNTAX_STYLE_DEFINITIONS["markup.heading.1"]?.fg;
+      const h2 = SYNTAX_STYLE_DEFINITIONS["markup.heading.2"]?.fg;
+      const h3 = SYNTAX_STYLE_DEFINITIONS["markup.heading.3"]?.fg;
       expect(h1).not.toBe(h2);
       expect(h2).not.toBe(h3);
       expect(h1).not.toBe(h3);
     });
 
     it("markup.bold は bold: true を持つ", () => {
-      expect(SYNTAX_STYLE_DEFINITIONS["markup.bold"].bold).toBe(true);
+      expect(SYNTAX_STYLE_DEFINITIONS["markup.bold"]?.bold).toBe(true);
     });
 
     it("markup.italic は italic: true を持つ", () => {
-      expect(SYNTAX_STYLE_DEFINITIONS["markup.italic"].italic).toBe(true);
+      expect(SYNTAX_STYLE_DEFINITIONS["markup.italic"]?.italic).toBe(true);
     });
 
     it("markup.rule は dim: true を持つ", () => {
-      expect(SYNTAX_STYLE_DEFINITIONS["markup.rule"].dim).toBe(true);
+      expect(SYNTAX_STYLE_DEFINITIONS["markup.rule"]?.dim).toBe(true);
     });
   });
 
@@ -89,7 +89,7 @@ describe("SYNTAX_STYLE_DEFINITIONS", () => {
       for (const [key, style] of Object.entries(SYNTAX_STYLE_DEFINITIONS)) {
         if (style.fg !== undefined) {
           expect(
-            HEX_COLOR_RE.test(style.fg as string),
+            HEX_COLOR_RE.test(style.fg),
             `${key}.fg "${style.fg}" is not a valid #RRGGBB color`
           ).toBe(true);
         }
@@ -99,11 +99,11 @@ describe("SYNTAX_STYLE_DEFINITIONS", () => {
 
   describe("属性の排他性・一貫性", () => {
     it("markup.bold は fg を持たない（装飾のみ）", () => {
-      expect(SYNTAX_STYLE_DEFINITIONS["markup.bold"].fg).toBeUndefined();
+      expect(SYNTAX_STYLE_DEFINITIONS["markup.bold"]?.fg).toBeUndefined();
     });
 
     it("markup.italic は fg を持たない（装飾のみ）", () => {
-      expect(SYNTAX_STYLE_DEFINITIONS["markup.italic"].fg).toBeUndefined();
+      expect(SYNTAX_STYLE_DEFINITIONS["markup.italic"]?.fg).toBeUndefined();
     });
   });
 });
