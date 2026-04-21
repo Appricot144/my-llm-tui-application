@@ -1,7 +1,7 @@
 import type { Message } from "../types.ts";
 import { LoadingSpinner } from "./LoadingSpinner.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
-import { splitUserMessageLines } from "../utils/messageUtils.ts";
+import { splitUserMessageLines, isStreamingMessage } from "../utils/messageUtils.ts";
 
 interface MessageListProps {
   messages: Message[];
@@ -29,7 +29,7 @@ export function MessageList({ messages, loading }: MessageListProps) {
           <AssistantMessage
             key={msg.id}
             content={msg.content}
-            streaming={loading && isLastMsg}
+            streaming={isStreamingMessage(loading, idx, messages.length)}
           />
         );
       })}

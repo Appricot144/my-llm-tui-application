@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitUserMessageLines } from "../utils/messageUtils.ts";
+import { splitUserMessageLines, isStreamingMessage } from "../utils/messageUtils.ts";
 
 describe("splitUserMessageLines", () => {
   it("単一行テキストは1要素の配列を返す", () => {
@@ -43,5 +43,35 @@ describe("splitUserMessageLines", () => {
   it("コードブロックを含む複数行を正しく分割する", () => {
     const input = "説明\n```ts\nconst x = 1;\n```";
     expect(splitUserMessageLines(input)).toEqual(["説明", "```ts", "const x = 1;", "```"]);
+  });
+});
+
+describe("isStreamingMessage", () => {
+  it("loading=true かつ最後のインデックスのとき true を返す", () => {
+    expect(isStreamingMessage(true, 2, 3)).toBe(true);
+  });
+
+  it("loading=false のとき常に false を返す", () => {
+    expect(isStreamingMessage(false, 2, 3)).toBe(false);
+  });
+
+  it("loading=true でも最後でないインデックスのとき false を返す", () => {
+    expect(isStreamingMessage(true, 1, 3)).toBe(false);
+  });
+
+  it("loading=false かつ最後でないインデックスのとき false を返す", () => {
+    expect(isStreamingMessage(false, 0, 3)).toBe(false);
+  });
+
+  it("メッセージが1件 (idx=0, total=1) のとき loading=true なら true を返す", () => {
+    expect(isStreamingMessage(true, 0, 1)).toBe(true);
+  });
+
+  it("total=0 のとき false を返す", () => {
+    expect(isStreamingMessage(true, 0, 0)).toBe(false);
+  });
+
+  it("大きいリストの中間インデックスのとき false を返す", () => {
+    expect(isStreamingMessage(true, 5, 20)).toBe(false);
   });
 });
