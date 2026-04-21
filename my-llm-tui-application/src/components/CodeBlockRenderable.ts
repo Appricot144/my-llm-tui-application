@@ -78,16 +78,8 @@ export class CodeBlockRenderable extends BoxRenderable {
     });
     header.add(this._copyButton);
 
-    const codeRow = new BoxRenderable(ctx, {
-      backgroundColor: CODE_BLOCK_BG,
-      width: "100%",
-      flexDirection: "row",
-    });
-    codeRow.add(lineNumbers);
-    codeRow.add(code);
-
     this.add(header);
-    this.add(codeRow);
+    this.add(lineNumbers);
   }
 
   private _handleCopy(): void {
