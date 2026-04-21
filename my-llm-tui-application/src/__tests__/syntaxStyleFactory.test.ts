@@ -82,6 +82,12 @@ describe("SYNTAX_STYLE_DEFINITIONS", () => {
     it("markup.rule は dim: true を持つ", () => {
       expect(SYNTAX_STYLE_DEFINITIONS["markup.rule"]?.dim).toBe(true);
     });
+
+    it("markup.inline.raw は bg カラーコードを持つ（インラインコード背景色）", () => {
+      const style = SYNTAX_STYLE_DEFINITIONS["markup.inline.raw"];
+      expect(style.bg).toBeDefined();
+      expect(HEX_COLOR_RE.test(style.bg!)).toBe(true);
+    });
   });
 
   describe("色コード形式のバリデーション", () => {
@@ -91,6 +97,17 @@ describe("SYNTAX_STYLE_DEFINITIONS", () => {
           expect(
             HEX_COLOR_RE.test(style.fg),
             `${key}.fg "${style.fg}" is not a valid #RRGGBB color`
+          ).toBe(true);
+        }
+      }
+    });
+
+    it("bg を持つ全スタイルのカラーコードが #RRGGBB 形式である", () => {
+      for (const [key, style] of Object.entries(SYNTAX_STYLE_DEFINITIONS)) {
+        if (style.bg !== undefined) {
+          expect(
+            HEX_COLOR_RE.test(style.bg),
+            `${key}.bg "${style.bg}" is not a valid #RRGGBB color`
           ).toBe(true);
         }
       }

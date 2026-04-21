@@ -14,7 +14,7 @@ export const SYNTAX_STYLE_DEFINITIONS: Record<string, StyleInput> = {
   "markup.heading.3":  { fg: "#ffb74d", bold: true },
   "markup.bold":       { bold: true },
   "markup.italic":     { italic: true },
-  "markup.inline.raw": { fg: "#ce9178" },
+  "markup.inline.raw": { fg: "#ce9178", bg: "#2d2d2d" },
   "markup.rule":       { fg: "#555555", dim: true },
   keyword:             { fg: "#c586c0" },
   string:              { fg: "#ce9178" },
