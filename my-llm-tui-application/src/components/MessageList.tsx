@@ -1,7 +1,6 @@
 import type { Message } from "../types.ts";
 import { LoadingSpinner } from "./LoadingSpinner.tsx";
-import { CodeBlock } from "./CodeBlock.tsx";
-import { parseMarkdown } from "../utils/markdownParser.ts";
+import { MarkdownContent } from "./MarkdownContent.tsx";
 
 interface MessageListProps {
   messages: Message[];
@@ -19,12 +18,19 @@ export function MessageList({ messages, loading }: MessageListProps) {
 
   return (
     <scrollbox flexGrow={1} stickyScroll={true} stickyStart="bottom" paddingLeft={1} paddingRight={1}>
-      {messages.map((msg) => {
+      {messages.map((msg, idx) => {
         const isUser = msg.role === "user";
+        const isLastMsg = idx === messages.length - 1;
         if (isUser) {
           return <UserMessage key={msg.id} content={msg.content} />;
         }
-        return <AssistantMessage key={msg.id} content={msg.content} />;
+        return (
+          <AssistantMessage
+            key={msg.id}
+            content={msg.content}
+            streaming={loading && isLastMsg}
+          />
+        );
       })}
       {loading && (
         <box marginTop={1}>
@@ -53,24 +59,13 @@ function UserMessage({ content }: { content: string }) {
   );
 }
 
-function AssistantMessage({ content }: { content: string }) {
-  const segments = parseMarkdown(content);
+function AssistantMessage({ content, streaming }: { content: string; streaming?: boolean }) {
   return (
     <box flexDirection="column" marginTop={1}>
       <text fg="#81c784" attributes={1}>  AI</text>
-      {segments.map((seg, i) => {
-        if (seg.type === "code") {
-          return <CodeBlock key={i} code={seg.content} language={seg.language} />;
-        }
-        const lines = seg.content.split("\n");
-        return (
-          <box key={i} flexDirection="column" paddingLeft={2}>
-            {lines.map((line, j) => (
-              <text key={j}>{line}</text>
-            ))}
-          </box>
-        );
-      })}
+      <box paddingLeft={2}>
+        <MarkdownContent content={content} streaming={streaming} />
+      </box>
     </box>
   );
 }
