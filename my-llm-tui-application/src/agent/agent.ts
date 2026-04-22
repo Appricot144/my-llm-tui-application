@@ -8,6 +8,7 @@
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
+import { summarizeToolResults } from "./summarizer.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
 import type { SecurityConfig } from "../config/config.ts";
 import type {
@@ -143,7 +144,22 @@ export async function run({
 
     if (response.stopReason === "tool_use") {
       const toolResults = await handleToolUse(response.content, fileCache, onToolUse, onToolConfirm);
-      newMessages.push({ role: "user", content: toolResults });
+
+      // tool_use_id → ツール名のマップを response.content から構築
+      const toolNames = new Map<string, string>(
+        response.content
+          .filter((b): b is NormalizedContentBlock & { type: "tool_use" } => b.type === "tool_use")
+          .map((b) => [b.id, b.name])
+      );
+      const { results: summarized, tokenUsage: summaryUsage } = await summarizeToolResults(
+        toolResults, toolNames, provider, model, userMessage
+      );
+      tokenUsage = addTokenUsage(tokenUsage, {
+        input_tokens: summaryUsage.inputTokens,
+        output_tokens: summaryUsage.outputTokens,
+      });
+
+      newMessages.push({ role: "user", content: summarized });
       continue;
     }
 
