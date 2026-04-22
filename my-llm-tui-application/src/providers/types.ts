@@ -86,4 +86,5 @@ export interface LLMProvider {
     onTextDelta: (fullText: string) => void
   ): Promise<NormalizedResponse>;
   readonly supportsTools: boolean;
+  readonly supportsPromptCaching: boolean;
 }

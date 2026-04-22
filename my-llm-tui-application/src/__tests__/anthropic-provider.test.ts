@@ -25,7 +25,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 // モック後にインポート
-const { AnthropicProvider } = await import("../providers/anthropic.ts");
+const { AnthropicProvider, modelSupportsPromptCaching } = await import("../providers/anthropic.ts");
 
 // ========================================================
 // テスト
@@ -51,6 +51,34 @@ describe("AnthropicProvider", () => {
   it("toolUse: false の場合 supportsTools が false になること", () => {
     const provider = new AnthropicProvider({ ...baseConfig, toolUse: false });
     expect(provider.supportsTools).toBe(false);
+  });
+
+  describe("supportsPromptCaching", () => {
+    it.each([
+      ["claude-3-haiku-20240307", true],
+      ["claude-3-opus-20240229", true],
+      ["claude-3-5-sonnet-20241022", true],
+      ["claude-3-5-haiku-20241022", true],
+      ["claude-3-7-sonnet-20250219", true],
+      ["claude-sonnet-4-20250514", true],
+      ["claude-opus-4-20250514", true],
+      ["claude-haiku-4-20250514", true],
+      ["claude-2.1", false],
+      ["claude-2.0", false],
+      ["claude-instant-1.2", false],
+    ])("%s → %s", (model, expected) => {
+      expect(modelSupportsPromptCaching(model)).toBe(expected);
+    });
+
+    it("claude-3+ モデルで supportsPromptCaching が true になること", () => {
+      const provider = new AnthropicProvider({ ...baseConfig, model: "claude-3-5-sonnet-20241022" });
+      expect(provider.supportsPromptCaching).toBe(true);
+    });
+
+    it("claude-2.x モデルで supportsPromptCaching が false になること", () => {
+      const provider = new AnthropicProvider({ ...baseConfig, model: "claude-2.1" });
+      expect(provider.supportsPromptCaching).toBe(false);
+    });
   });
 
   describe("コンストラクタ — SDK への引数", () => {

@@ -77,6 +77,9 @@ export class BedrockCompatibleProvider implements LLMProvider {
   private baseUrl: string;
   private headers: Record<string, string>;
   readonly supportsTools: boolean;
+  // Bedrock は Claude 3.5+ でキャッシングをサポートするが、system を配列形式に変更する
+  // 必要があるため現実装では未対応
+  readonly supportsPromptCaching = false;
 
   constructor(config: AppConfig) {
     if (!config.baseUrl) {

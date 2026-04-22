@@ -67,6 +67,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private apiKey: string;
   private headers: Record<string, string>;
   readonly supportsTools: boolean;
+  readonly supportsPromptCaching = false;
 
   constructor(config: AppConfig) {
     if (!config.baseUrl) {

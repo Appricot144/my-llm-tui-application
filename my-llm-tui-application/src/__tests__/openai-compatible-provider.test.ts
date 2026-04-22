@@ -204,6 +204,11 @@ describe("OpenAICompatibleProvider", () => {
     expect(provider.supportsTools).toBe(true);
   });
 
+  it("supportsPromptCaching は常に false であること", () => {
+    const provider = new OpenAICompatibleProvider(baseConfig);
+    expect(provider.supportsPromptCaching).toBe(false);
+  });
+
   describe("streamMessage", () => {
     let mockFetch: ReturnType<typeof vi.spyOn>;
 

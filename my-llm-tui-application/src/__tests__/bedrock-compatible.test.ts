@@ -66,6 +66,11 @@ describe("BedrockCompatibleProvider", () => {
     expect(provider.supportsTools).toBe(false);
   });
 
+  it("supportsPromptCaching は常に false であること", () => {
+    const provider = new BedrockCompatibleProvider(baseConfig);
+    expect(provider.supportsPromptCaching).toBe(false);
+  });
+
   describe("streamMessage — リクエスト内容", () => {
     it("Bedrock 形式のボディを baseUrl にそのまま POST すること", async () => {
       const mockFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(

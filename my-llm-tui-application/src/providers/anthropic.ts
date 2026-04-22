@@ -8,9 +8,18 @@ import type {
   NormalizedResponse,
 } from "./types.ts";
 
+/**
+ * Claude 3 以降の直接 API モデルはプロンプトキャッシングをサポートする。
+ * claude-2.x / claude-instant は非対応。
+ */
+export function modelSupportsPromptCaching(model: string): boolean {
+  return /^claude-3/.test(model) || /^claude-(sonnet|opus|haiku)-[4-9]/.test(model);
+}
+
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
   readonly supportsTools: boolean;
+  readonly supportsPromptCaching: boolean;
 
   constructor(config: AppConfig) {
     // anthropic プロバイダーでは SDK が認証ヘッダーを管理するため
@@ -20,6 +29,7 @@ export class AnthropicProvider implements LLMProvider {
       ...(config.baseUrl && { baseURL: config.baseUrl }),
     });
     this.supportsTools = config.toolUse ?? true;
+    this.supportsPromptCaching = modelSupportsPromptCaching(config.model);
   }
 
   async streamMessage(
