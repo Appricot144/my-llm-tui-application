@@ -61,3 +61,18 @@ export function getPrompt(mode: Mode): string {
   }
   return prompt;
 }
+
+export function getPlanningPrompt(): string {
+  return [
+    "あなたはタスク分解の専門家です。",
+    "ユーザーの依頼を具体的なサブタスクに分解し、以下のJSON形式のみを返してください。",
+    "テキストは一切含めず、JSONのみを返すこと。",
+    "",
+    '{"tasks":[{"title":"タスク名","detail":"具体的な作業内容"}]}',
+    "",
+    "ルール:",
+    "- tasksは最大5件",
+    "- titleは15文字以内",
+    "- detailは対象ファイルや手順を含む具体的な内容",
+  ].join("\n");
+}
