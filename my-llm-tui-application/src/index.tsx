@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { createCliRenderer, TextAttributes } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { useChat } from "./hooks/useChat.ts";
@@ -31,6 +31,7 @@ function App() {
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const planPrefixRef = useRef("");
 
   useEffect(() => {
     registerInitCommand({
@@ -71,6 +72,7 @@ function App() {
     addUserMessage(text);
     setLoading(true);
     addAssistantMessage("");
+    planPrefixRef.current = "";
 
     try {
       const conversationHistory = messages.map(
@@ -86,12 +88,17 @@ function App() {
         mode,
         securityConfig: appConfig.security,
         projectContext: getProjectContext() ?? undefined,
+        onPlanGenerated: (plan) => {
+          const lines = plan.tasks.map((t, i) => `${i + 1}. **${t.title}**: ${t.detail}`);
+          planPrefixRef.current = `[計画]\n${lines.join("\n")}\n\n`;
+          updateLastAssistantMessage(planPrefixRef.current);
+        },
         onTextDelta: (fullText) => {
-          updateLastAssistantMessage(fullText);
+          updateLastAssistantMessage(planPrefixRef.current + fullText);
         },
         onToolUse: (toolName, toolInput) => {
           const inputPreview = JSON.stringify(toolInput).slice(0, 80);
-          updateLastAssistantMessage(`[ツール実行中] ${toolName}(${inputPreview})\n`);
+          updateLastAssistantMessage(planPrefixRef.current + `[ツール実行中] ${toolName}(${inputPreview})\n`);
         },
         onToolConfirm: (toolName, toolInput) =>
           new Promise<boolean>((resolve) => {

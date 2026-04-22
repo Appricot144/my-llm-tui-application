@@ -8,6 +8,7 @@
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
+import { planTasks, type TaskPlan } from "./planner.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
 import type { SecurityConfig } from "../config/config.ts";
 import type {
@@ -55,6 +56,8 @@ export interface RunOptions {
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void;
   /** 書き込みツール実行前の承認コールバック。false を返すとキャンセル */
   onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>;
+  /** Planning フェーズ完了時のコールバック（chat モード以外で呼ばれる） */
+  onPlanGenerated?: (plan: TaskPlan) => void;
 }
 
 export interface RunResult {
@@ -82,6 +85,7 @@ export async function run({
   onTextDelta,
   onToolUse,
   onToolConfirm,
+  onPlanGenerated,
 }: RunOptions): Promise<RunResult> {
   const useTools = mode !== "chat" && provider.supportsTools;
   if (useTools) {
@@ -90,7 +94,7 @@ export async function run({
   }
 
   const basePrompt = getPrompt(mode);
-  const systemPrompt = projectContext
+  let systemPrompt = projectContext
     ? `${basePrompt}\n\n[プロジェクト概要]\n${projectContext}`
     : basePrompt;
 
@@ -107,6 +111,20 @@ export async function run({
 
   let tokenUsage = createTokenUsage();
   const fileCache = new Map<string, string>();
+
+  // chat モードとツール非対応プロバイダーは planning をスキップ
+  if (useTools) {
+    const { plan, tokenUsage: planTokenUsage } = await planTasks(provider, model, userMessage);
+    tokenUsage = addTokenUsage(tokenUsage, {
+      input_tokens: planTokenUsage.inputTokens,
+      output_tokens: planTokenUsage.outputTokens,
+    });
+    onPlanGenerated?.(plan);
+    const planText = plan.tasks
+      .map((t, i) => `${i + 1}. ${t.title}: ${t.detail}`)
+      .join("\n");
+    systemPrompt += `\n\n[実行計画]\n${planText}`;
+  }
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     const response = await provider.streamMessage(
