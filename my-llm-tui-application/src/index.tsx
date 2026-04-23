@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { createCliRenderer, TextAttributes } from "@opentui/core";
-import { createRoot } from "@opentui/react";
+import { createRoot, useKeyboard } from "@opentui/react";
 import { useChat } from "./hooks/useChat.ts";
 import { MessageList } from "./components/MessageList.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
@@ -31,7 +31,24 @@ function App() {
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [showExitHint, setShowExitHint] = useState(false);
   const planPrefixRef = useRef("");
+  const ctrlCTimeRef = useRef<number | null>(null);
+
+  useKeyboard((key) => {
+    if (!key.ctrl || key.name !== "c") return;
+    const now = Date.now();
+    const prev = ctrlCTimeRef.current;
+    if (prev !== null && now - prev <= 1500) {
+      process.exit(0);
+    }
+    ctrlCTimeRef.current = now;
+    setShowExitHint(true);
+    setTimeout(() => {
+      ctrlCTimeRef.current = null;
+      setShowExitHint(false);
+    }, 1500);
+  });
 
   useEffect(() => {
     registerInitCommand({
@@ -132,7 +149,9 @@ function App() {
       >
         <box flexDirection="column">
           <text fg="#4fc3f7" attributes={TextAttributes.BOLD}>LLM Chat</text>
-          <text fg="#666666">{MODE_LABELS[mode]} | Shift+Tab でモード切替 | Ctrl+C で終了</text>
+          <text fg={showExitHint ? "#f4a261" : "#666666"}>
+            {MODE_LABELS[mode]} | Shift+Tab でモード切替 | {showExitHint ? "もう一度 Ctrl+C で終了" : "Ctrl+C×2 で終了"}
+          </text>
         </box>
         <box flexDirection="row" alignItems="flex-end">
           <text fg="#81c784">{appConfig.provider}</text>
@@ -162,5 +181,5 @@ function App() {
   );
 }
 
-const renderer = await createCliRenderer();
+const renderer = await createCliRenderer({ exitOnCtrlC: false });
 createRoot(renderer).render(<App />);
