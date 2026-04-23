@@ -208,6 +208,64 @@ describe("AnthropicProvider", () => {
       expect(result.stopReason).toBe("max_tokens");
     });
 
+    it("supportsPromptCaching が true のとき system を cache_control 付き配列で渡すこと", async () => {
+      mockOn.mockImplementation(() => {});
+      mockFinalMessage.mockResolvedValue({
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 5, output_tokens: 3 },
+      });
+
+      const provider = new AnthropicProvider({ ...baseConfig, model: "claude-sonnet-4-20250514" });
+      await provider.streamMessage(
+        { model: "claude-sonnet-4-20250514", maxTokens: 1024, system: "システム", messages: [] },
+        () => {}
+      );
+
+      expect(mockMessagesStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: [{ type: "text", text: "システム", cache_control: { type: "ephemeral" } }],
+        })
+      );
+    });
+
+    it("supportsPromptCaching が false のとき system を文字列で渡すこと", async () => {
+      mockOn.mockImplementation(() => {});
+      mockFinalMessage.mockResolvedValue({
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 5, output_tokens: 3 },
+      });
+
+      const provider = new AnthropicProvider({ ...baseConfig, model: "claude-2.1" });
+      await provider.streamMessage(
+        { model: "claude-2.1", maxTokens: 1024, system: "システム", messages: [] },
+        () => {}
+      );
+
+      expect(mockMessagesStream).toHaveBeenCalledWith(
+        expect.objectContaining({ system: "システム" })
+      );
+    });
+
+    it("system が空文字のとき system を渡さないこと", async () => {
+      mockOn.mockImplementation(() => {});
+      mockFinalMessage.mockResolvedValue({
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 5, output_tokens: 3 },
+      });
+
+      const provider = new AnthropicProvider(baseConfig);
+      await provider.streamMessage(
+        { model: "claude-sonnet-4-20250514", maxTokens: 1024, system: "", messages: [] },
+        () => {}
+      );
+
+      const calledWith = mockMessagesStream.mock.calls[0][0] as Record<string, unknown>;
+      expect(calledWith["system"]).toBeUndefined();
+    });
+
     it("tools パラメータを指定したとき stream に渡すこと", async () => {
       mockOn.mockImplementation(() => {});
       mockFinalMessage.mockResolvedValue({

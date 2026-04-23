@@ -39,9 +39,19 @@ export class AnthropicProvider implements LLMProvider {
     const requestParams: Anthropic.Messages.MessageStreamParams = {
       model: params.model,
       max_tokens: params.maxTokens,
-      system: params.system,
       messages: toAnthropicMessages(params.messages),
     };
+    if (Array.isArray(params.system)) {
+      if (params.system.length > 0) {
+        requestParams.system = params.system as unknown as Anthropic.Messages.TextBlockParam[];
+      }
+    } else if (params.system) {
+      if (this.supportsPromptCaching) {
+        requestParams.system = [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }];
+      } else {
+        requestParams.system = params.system;
+      }
+    }
     if (params.tools && params.tools.length > 0) {
       requestParams.tools = params.tools as unknown as Anthropic.Messages.Tool[];
     }

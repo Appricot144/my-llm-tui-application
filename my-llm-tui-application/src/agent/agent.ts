@@ -8,7 +8,7 @@
 import { TOOL_SCHEMAS, dispatch, setRoot } from "../tools/tools.ts";
 import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
-import { planTasks, type TaskPlan } from "./planner.ts";
+import { planTasks, needsPlanning, type TaskPlan } from "./planner.ts";
 import { createTokenUsage, addTokenUsage, type TokenUsage } from "../utils/tokenUsage.ts";
 import type { SecurityConfig } from "../config/config.ts";
 import type {
@@ -112,18 +112,21 @@ export async function run({
   let tokenUsage = createTokenUsage();
   const fileCache = new Map<string, string>();
 
-  // chat モードとツール非対応プロバイダーは planning をスキップ
-  if (useTools) {
+  // chat モード・ツール非対応・分解済み入力は planning をスキップ
+  if (useTools && needsPlanning(userMessage)) {
     const { plan, tokenUsage: planTokenUsage } = await planTasks(provider, model, userMessage);
     tokenUsage = addTokenUsage(tokenUsage, {
       input_tokens: planTokenUsage.inputTokens,
       output_tokens: planTokenUsage.outputTokens,
     });
-    onPlanGenerated?.(plan);
-    const planText = plan.tasks
-      .map((t, i) => `${i + 1}. ${t.title}: ${t.detail}`)
-      .join("\n");
-    systemPrompt += `\n\n[実行計画]\n${planText}`;
+
+    if (plan.tasks.length > 0) {
+      onPlanGenerated?.(plan);
+      const planText = plan.tasks
+        .map((t, i) => `${i + 1}. ${t.title}: ${t.detail}`)
+        .join("\n");
+      systemPrompt += `\n\n[実行計画]\n${planText}`;
+    }
   }
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {

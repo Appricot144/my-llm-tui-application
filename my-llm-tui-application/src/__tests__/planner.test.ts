@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { LLMProvider } from "../providers/types.ts";
-import { planTasks, parsePlan } from "../agent/planner.ts";
+import { planTasks, parsePlan, needsPlanning } from "../agent/planner.ts";
 
 // ========================================================
 // モックプロバイダーヘルパー
@@ -54,6 +54,13 @@ describe("planTasks", () => {
     expect(plan.tasks).toHaveLength(1);
     expect(plan.tasks[0]!.title).toBe("タスク実行");
     expect(plan.tasks[0]!.detail).toBe("ユーザーの依頼");
+  });
+
+  it('LLMが {"tasks":[]} を返した場合は空のタスクリストを返すこと', async () => {
+    const provider = makeProvider('{"tasks":[]}');
+    const { plan } = await planTasks(provider, "claude-sonnet-4", "テスト");
+
+    expect(plan.tasks).toHaveLength(0);
   });
 
   it("tools を渡さずに streamMessage を呼ぶこと", async () => {
@@ -129,5 +136,48 @@ describe("parsePlan", () => {
   it("空文字列はフォールバックを返すこと", () => {
     const plan = parsePlan("", "フォールバック依頼");
     expect(plan.tasks[0]!.detail).toBe("フォールバック依頼");
+  });
+
+  it('{"tasks":[]} は空のタスクリストとして有効なプランを返すこと', () => {
+    const plan = parsePlan('{"tasks":[]}', "テスト依頼");
+    expect(plan.tasks).toHaveLength(0);
+  });
+});
+
+// ========================================================
+// needsPlanning のテスト
+// ========================================================
+
+describe("needsPlanning", () => {
+  it("通常の依頼文は true を返すこと", () => {
+    expect(needsPlanning("ファイルを修正してください")).toBe(true);
+  });
+
+  it("番号付きリスト2行以上は false を返すこと", () => {
+    expect(needsPlanning("1. src/foo.ts を修正\n2. テストを実行")).toBe(false);
+  });
+
+  it("閉じ括弧形式の番号付きリスト2行以上は false を返すこと", () => {
+    expect(needsPlanning("1) foo.ts を変更\n2) bar.ts を変更")).toBe(false);
+  });
+
+  it("箇条書き2行以上は false を返すこと", () => {
+    expect(needsPlanning("- foo.ts を変更\n- bar.ts を変更")).toBe(false);
+  });
+
+  it("アスタリスク箇条書き2行以上は false を返すこと", () => {
+    expect(needsPlanning("* foo.ts を変更\n* bar.ts を変更")).toBe(false);
+  });
+
+  it("番号付きリストが1行だけなら true を返すこと", () => {
+    expect(needsPlanning("1. ファイルを修正する")).toBe(true);
+  });
+
+  it("箇条書きが1行だけなら true を返すこと", () => {
+    expect(needsPlanning("- ファイルを修正する")).toBe(true);
+  });
+
+  it("番号なし複数行テキストは true を返すこと", () => {
+    expect(needsPlanning("バグを修正してください。\nエラーメッセージは〇〇です。")).toBe(true);
   });
 });

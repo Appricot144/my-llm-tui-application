@@ -80,7 +80,7 @@ export interface NormalizedResponse {
 export interface LLMRequestParams {
   model: string;
   maxTokens: number;
-  system: string;
+  system: string | TextBlockParam[];
   messages: MessageParam[];
   tools?: ToolSchema[];
 }

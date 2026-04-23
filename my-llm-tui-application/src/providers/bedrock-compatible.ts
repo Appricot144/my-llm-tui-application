@@ -2,6 +2,7 @@ import type { AppConfig } from "../config/config.ts";
 import type {
   LLMProvider,
   LLMRequestParams,
+  TextBlockParam,
   NormalizedContentBlock,
   NormalizedResponse,
 } from "./types.ts";

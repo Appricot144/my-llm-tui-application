@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { buildCacheKey } from "../agent/agent.ts";
+import { describe, it, expect, vi } from "vitest";
+import { buildCacheKey, run } from "../agent/agent.ts";
+import type { LLMProvider } from "../providers/types.ts";
 
 describe("buildCacheKey", () => {
   describe("read_file", () => {
@@ -83,5 +84,101 @@ describe("buildCacheKey", () => {
     it("未知のツール名は null を返す", () => {
       expect(buildCacheKey("unknown_tool", {})).toBeNull();
     });
+  });
+});
+
+// ========================================================
+// planning スキップ動作のテスト
+// ========================================================
+
+function makeRunProvider(responses: { text: string }[]): LLMProvider {
+  const mock = vi.fn();
+  for (const r of responses) {
+    mock.mockResolvedValueOnce({
+      content: [{ type: "text", text: r.text }],
+      stopReason: "end_turn",
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+  }
+  return {
+    supportsTools: true,
+    supportsPromptCaching: false,
+    streamMessage: mock,
+  } as unknown as LLMProvider;
+}
+
+const RUN_BASE = {
+  model: "claude-sonnet-4",
+  conversationHistory: [],
+  projectRoot: "/tmp",
+  mode: "coding",
+} as const;
+
+describe("planning スキップ", () => {
+  it("番号付きリスト入力は planning コールをスキップすること", async () => {
+    const provider = makeRunProvider([{ text: "完了しました" }]);
+
+    await run({
+      ...RUN_BASE,
+      provider,
+      userMessage: "1. foo.ts を修正\n2. bar.ts を修正",
+    });
+
+    // planning なし → streamMessage は本体の1回のみ
+    expect(provider.streamMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("通常の依頼文は planning コールを行うこと", async () => {
+    const planJson = JSON.stringify({
+      tasks: [{ title: "実行", detail: "処理する" }],
+    });
+    const provider = makeRunProvider([
+      { text: planJson },
+      { text: "完了しました" },
+    ]);
+
+    await run({
+      ...RUN_BASE,
+      provider,
+      userMessage: "新機能を追加してください",
+    });
+
+    // planning + 本体 → 2回
+    expect(provider.streamMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("planning が空タスクを返した場合 onPlanGenerated が呼ばれないこと", async () => {
+    const provider = makeRunProvider([
+      { text: '{"tasks":[]}' },
+      { text: "完了しました" },
+    ]);
+    const onPlanGenerated = vi.fn();
+
+    await run({
+      ...RUN_BASE,
+      provider,
+      userMessage: "ファイルを修正してください",
+      onPlanGenerated,
+    });
+
+    expect(onPlanGenerated).not.toHaveBeenCalled();
+  });
+
+  it("planning が空タスクを返した場合もシステムプロンプトに実行計画が注入されないこと", async () => {
+    const provider = makeRunProvider([
+      { text: '{"tasks":[]}' },
+      { text: "完了しました" },
+    ]);
+
+    await run({
+      ...RUN_BASE,
+      provider,
+      userMessage: "ファイルを修正してください",
+    });
+
+    const [secondCallParams] = (provider.streamMessage as ReturnType<typeof vi.fn>).mock.calls[1] as [
+      Record<string, unknown>,
+    ];
+    expect(secondCallParams["system"]).not.toContain("[実行計画]");
   });
 });
