@@ -10,12 +10,22 @@ import type {
 // Bedrock リクエスト型定義
 // ========================================================
 
+interface BedrockSystemBlock {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+}
+
 interface BedrockRequestBody {
   anthropic_version: "bedrock-2023-05-31";
   max_tokens: number;
   messages: unknown[];
-  system?: string;
+  system?: string | BedrockSystemBlock[];
   tools?: unknown[];
+}
+
+function modelSupportsPromptCaching(model: string): boolean {
+  return /^claude-3/.test(model) || /^claude-(sonnet|opus|haiku)-[4-9]/.test(model);
 }
 
 // ========================================================
@@ -77,9 +87,7 @@ export class BedrockCompatibleProvider implements LLMProvider {
   private baseUrl: string;
   private headers: Record<string, string>;
   readonly supportsTools: boolean;
-  // Bedrock は Claude 3.5+ でキャッシングをサポートするが、system を配列形式に変更する
-  // 必要があるため現実装では未対応
-  readonly supportsPromptCaching = false;
+  readonly supportsPromptCaching: boolean;
 
   constructor(config: AppConfig) {
     if (!config.baseUrl) {
@@ -88,6 +96,7 @@ export class BedrockCompatibleProvider implements LLMProvider {
     this.baseUrl = config.baseUrl;
     this.headers = config.headers ?? {};
     this.supportsTools = config.toolUse ?? true;
+    this.supportsPromptCaching = modelSupportsPromptCaching(config.model);
   }
 
   async streamMessage(
@@ -100,7 +109,11 @@ export class BedrockCompatibleProvider implements LLMProvider {
       messages: params.messages as unknown[],
     };
     if (params.system) {
-      body.system = params.system;
+      if (this.supportsPromptCaching) {
+        body.system = [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }];
+      } else {
+        body.system = params.system;
+      }
     }
     if (params.tools && params.tools.length > 0) {
       body.tools = params.tools;

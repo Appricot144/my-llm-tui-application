@@ -66,8 +66,13 @@ describe("BedrockCompatibleProvider", () => {
     expect(provider.supportsTools).toBe(false);
   });
 
-  it("supportsPromptCaching は常に false であること", () => {
+  it("claude-sonnet-4-6 の場合 supportsPromptCaching は true であること", () => {
     const provider = new BedrockCompatibleProvider(baseConfig);
+    expect(provider.supportsPromptCaching).toBe(true);
+  });
+
+  it("キャッシング非対応モデルの場合 supportsPromptCaching は false であること", () => {
+    const provider = new BedrockCompatibleProvider({ ...baseConfig, model: "claude-2.1" });
     expect(provider.supportsPromptCaching).toBe(false);
   });
 
@@ -100,8 +105,35 @@ describe("BedrockCompatibleProvider", () => {
       const body = JSON.parse(options.body as string) as Record<string, unknown>;
       expect(body["anthropic_version"]).toBe("bedrock-2023-05-31");
       expect(body["max_tokens"]).toBe(1024);
-      expect(body["system"]).toBe("システム");
+      expect(body["system"]).toEqual([
+        { type: "text", text: "システム", cache_control: { type: "ephemeral" } },
+      ]);
       expect(body["messages"]).toEqual([{ role: "user", content: "こんにちは" }]);
+    });
+
+    it("キャッシング非対応モデルの場合 system を文字列で送ること", async () => {
+      const mockFetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        makeJsonResponse({
+          content: [{ type: "text", text: "OK" }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 5, output_tokens: 3 },
+        })
+      );
+
+      const provider = new BedrockCompatibleProvider({ ...baseConfig, model: "claude-2.1" });
+      await provider.streamMessage(
+        {
+          model: "claude-2.1",
+          maxTokens: 1024,
+          system: "システム",
+          messages: [{ role: "user", content: "こんにちは" }],
+        },
+        () => {}
+      );
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const body = JSON.parse(options.body as string) as Record<string, unknown>;
+      expect(body["system"]).toBe("システム");
     });
 
     it("config.headers が Authorization を含めすべてのヘッダーに反映されること", async () => {

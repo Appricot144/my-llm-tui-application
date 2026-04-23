@@ -2,9 +2,14 @@
 // プロバイダー非依存のメッセージ型
 // ========================================================
 
+export interface CacheControlEphemeral {
+  type: "ephemeral";
+}
+
 export interface TextBlockParam {
   type: "text";
   text: string;
+  cache_control?: CacheControlEphemeral;
 }
 
 export interface ToolUseBlockParam {
