@@ -235,13 +235,16 @@ function mapFinishReason(
 // ========================================================
 
 export function convertMessages(
-  system: string,
+  system: string | TextBlockParam[],
   messages: MessageParam[]
 ): OpenAIMessage[] {
   const result: OpenAIMessage[] = [];
 
-  if (system) {
-    result.push({ role: "system", content: system });
+  const systemText = Array.isArray(system)
+    ? system.map((b) => b.text).join("")
+    : system;
+  if (systemText) {
+    result.push({ role: "system", content: systemText });
   }
 
   for (const msg of messages) {

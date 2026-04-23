@@ -1,4 +1,4 @@
-import type { LLMProvider } from "../providers/types.ts";
+import type { LLMProvider, TextBlockParam } from "../providers/types.ts";
 
 // ========================================================
 // 定数
@@ -78,11 +78,15 @@ export async function planTasks(
   model: string,
   userMessage: string,
 ): Promise<PlanningResult> {
+  const system: string | TextBlockParam[] = provider.supportsPromptCaching
+    ? [{ type: "text", text: getPlanningPrompt(), cache_control: { type: "ephemeral" } }]
+    : getPlanningPrompt();
+
   const response = await provider.streamMessage(
     {
       model,
       maxTokens: PLANNING_MAX_TOKENS,
-      system: getPlanningPrompt(),
+      system,
       messages: [{ role: "user", content: userMessage }],
     },
     () => {}

@@ -109,7 +109,17 @@ export class BedrockCompatibleProvider implements LLMProvider {
       max_tokens: params.maxTokens,
       messages: params.messages as unknown[],
     };
-    if (params.system) {
+    if (Array.isArray(params.system)) {
+      if (params.system.length > 0) {
+        body.system = (params.system as TextBlockParam[]).map((block) => ({
+          type: "text" as const,
+          text: block.text,
+          ...(block.cache_control && this.supportsPromptCaching
+            ? { cache_control: { type: "ephemeral" as const } }
+            : {}),
+        }));
+      }
+    } else if (params.system) {
       if (this.supportsPromptCaching) {
         body.system = [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }];
       } else {

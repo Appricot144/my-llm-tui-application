@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildCacheKey, run } from "../agent/agent.ts";
+import { buildCacheKey, buildSystemParam, run } from "../agent/agent.ts";
 import type { LLMProvider } from "../providers/types.ts";
 
 describe("buildCacheKey", () => {
@@ -84,6 +84,40 @@ describe("buildCacheKey", () => {
     it("未知のツール名は null を返す", () => {
       expect(buildCacheKey("unknown_tool", {})).toBeNull();
     });
+  });
+});
+
+// ========================================================
+// buildSystemParam のテスト
+// ========================================================
+
+describe("buildSystemParam", () => {
+  it("projectContext なしは base 文字列をそのまま返すこと", () => {
+    const result = buildSystemParam("basePrompt", undefined, false);
+    expect(result).toBe("basePrompt");
+  });
+
+  it("projectContext あり・supportsPromptCaching=false は結合文字列を返すこと", () => {
+    const result = buildSystemParam("base", "context", false);
+    expect(result).toBe("base\n\n[プロジェクト概要]\ncontext");
+  });
+
+  it("projectContext あり・supportsPromptCaching=true は2ブロック配列を返すこと", () => {
+    const result = buildSystemParam("base", "context", true);
+    expect(Array.isArray(result)).toBe(true);
+    const blocks = result as Array<Record<string, unknown>>;
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toEqual({ type: "text", text: "base" });
+    expect(blocks[1]).toEqual({
+      type: "text",
+      text: "[プロジェクト概要]\ncontext",
+      cache_control: { type: "ephemeral" },
+    });
+  });
+
+  it("projectContext なし・supportsPromptCaching=true でも文字列を返すこと", () => {
+    const result = buildSystemParam("base", undefined, true);
+    expect(result).toBe("base");
   });
 });
 

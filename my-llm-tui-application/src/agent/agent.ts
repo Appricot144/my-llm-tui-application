@@ -17,6 +17,7 @@ import type {
   ContentBlockParam,
   ToolResultBlockParam,
   NormalizedContentBlock,
+  TextBlockParam,
 } from "../providers/types.ts";
 
 // ========================================================
@@ -94,9 +95,7 @@ export async function run({
   }
 
   const basePrompt = getPrompt(mode);
-  let systemPrompt = projectContext
-    ? `${basePrompt}\n\n[プロジェクト概要]\n${projectContext}`
-    : basePrompt;
+  let systemBase = basePrompt;
 
   // エージェントループ中に追加されるメッセージ
   const newMessages: MessageParam[] = [
@@ -125,7 +124,7 @@ export async function run({
       const planText = plan.tasks
         .map((t, i) => `${i + 1}. ${t.title}: ${t.detail}`)
         .join("\n");
-      systemPrompt += `\n\n[実行計画]\n${planText}`;
+      systemBase += `\n\n[実行計画]\n${planText}`;
     }
   }
 
@@ -134,7 +133,7 @@ export async function run({
       {
         model,
         maxTokens: MAX_TOKENS,
-        system: systemPrompt,
+        system: buildSystemParam(systemBase, projectContext, provider.supportsPromptCaching),
         messages: allMessages(),
         tools: useTools ? (TOOL_SCHEMAS as unknown as Parameters<typeof provider.streamMessage>[0]["tools"]) : undefined,
       },
@@ -262,4 +261,21 @@ function extractText(contentBlocks: NormalizedContentBlock[]): string {
     .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
     .join("\n");
+}
+
+export function buildSystemParam(
+  base: string,
+  projectContext: string | undefined,
+  supportsPromptCaching: boolean
+): string | TextBlockParam[] {
+  if (projectContext && supportsPromptCaching) {
+    return [
+      { type: "text", text: base },
+      { type: "text", text: "[プロジェクト概要]\n" + projectContext, cache_control: { type: "ephemeral" } },
+    ];
+  }
+  if (projectContext) {
+    return `${base}\n\n[プロジェクト概要]\n${projectContext}`;
+  }
+  return base;
 }

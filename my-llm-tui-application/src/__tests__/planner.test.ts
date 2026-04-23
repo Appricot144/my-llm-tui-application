@@ -83,6 +83,35 @@ describe("planTasks", () => {
     );
   });
 
+  it("supportsPromptCaching が true のとき system を cache_control 付き配列で渡すこと", async () => {
+    const json = JSON.stringify({ tasks: [{ title: "実行", detail: "処理する" }] });
+    const provider: LLMProvider = {
+      supportsTools: true,
+      supportsPromptCaching: true,
+      streamMessage: vi.fn().mockResolvedValue({
+        content: [{ type: "text", text: json }],
+        stopReason: "end_turn",
+        usage: { inputTokens: 50, outputTokens: 80 },
+      }),
+    } as unknown as LLMProvider;
+
+    await planTasks(provider, "claude-sonnet-4", "テスト");
+
+    const [params] = (provider.streamMessage as ReturnType<typeof vi.fn>).mock.calls[0] as [Record<string, unknown>];
+    expect(Array.isArray(params["system"])).toBe(true);
+    const system = params["system"] as Array<Record<string, unknown>>;
+    expect(system[0]).toMatchObject({ type: "text", cache_control: { type: "ephemeral" } });
+  });
+
+  it("supportsPromptCaching が false のとき system を文字列で渡すこと", async () => {
+    const json = JSON.stringify({ tasks: [{ title: "実行", detail: "処理する" }] });
+    const provider = makeProvider(json);
+    await planTasks(provider, "claude-sonnet-4", "テスト");
+
+    const [params] = (provider.streamMessage as ReturnType<typeof vi.fn>).mock.calls[0] as [Record<string, unknown>];
+    expect(typeof params["system"]).toBe("string");
+  });
+
   it("会話履歴なし・ユーザーメッセージのみで呼ばれること", async () => {
     const json = JSON.stringify({ tasks: [{ title: "実行", detail: "処理する" }] });
     const provider = makeProvider(json);
