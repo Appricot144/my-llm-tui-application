@@ -26,7 +26,7 @@ export interface PendingConfirm {
   resolve: (confirmed: boolean) => void;
 }
 
-function App() {
+function App({ onExit }: { onExit: () => void }) {
   const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
@@ -40,7 +40,7 @@ function App() {
     const now = Date.now();
     const prev = ctrlCTimeRef.current;
     if (prev !== null && now - prev <= 1500) {
-      process.exit(0);
+      onExit();
     }
     ctrlCTimeRef.current = now;
     setShowExitHint(true);
@@ -182,4 +182,4 @@ function App() {
 }
 
 const renderer = await createCliRenderer({ exitOnCtrlC: false });
-createRoot(renderer).render(<App />);
+createRoot(renderer).render(<App onExit={() => renderer.destroy()} />);
