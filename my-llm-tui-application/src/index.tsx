@@ -36,7 +36,18 @@ function App({ onExit }: { onExit: () => void }) {
   const ctrlCTimeRef = useRef<number | null>(null);
 
   useKeyboard((key) => {
-    if (!key.ctrl || key.name !== "c") return;
+    if (!key.ctrl) return;
+
+    if (key.name === "y") {
+      const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+      if (lastAssistant?.content) {
+        (renderer as unknown as { copyToClipboardOSC52?: (text: string) => boolean })
+          .copyToClipboardOSC52?.(lastAssistant.content);
+      }
+      return;
+    }
+
+    if (key.name !== "c") return;
     const now = Date.now();
     const prev = ctrlCTimeRef.current;
     if (prev !== null && now - prev <= 1500) {
