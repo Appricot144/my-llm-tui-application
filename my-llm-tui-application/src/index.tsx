@@ -12,6 +12,7 @@ import { createProvider } from "./providers/factory.ts";
 import type { LLMProvider } from "./providers/types.ts";
 import type { Mode } from "./agent/prompts.ts";
 import type { Message } from "./types.ts";
+import type { DiffResult } from "./tools/tools.ts";
 import { executeCommand } from "./commands/registry.ts";
 import { registerInitCommand } from "./commands/init.ts";
 import { getProjectContext } from "./agent/projectContext.ts";
@@ -24,6 +25,7 @@ export interface PendingConfirm {
   toolName: string;
   input: Record<string, unknown>;
   resolve: (confirmed: boolean) => void;
+  previewDiff?: DiffResult;
 }
 
 function App({ onExit }: { onExit: () => void }) {
@@ -128,9 +130,9 @@ function App({ onExit }: { onExit: () => void }) {
           const inputPreview = JSON.stringify(toolInput).slice(0, 80);
           updateLastAssistantMessage(planPrefixRef.current + `[ツール実行中] ${toolName}(${inputPreview})\n`);
         },
-        onToolConfirm: (toolName, toolInput) =>
+        onToolConfirm: (toolName, toolInput, previewDiff) =>
           new Promise<boolean>((resolve) => {
-            setPendingConfirm({ toolName, input: toolInput, resolve });
+            setPendingConfirm({ toolName, input: toolInput, resolve, previewDiff });
           }),
         onToolDiff: (filePath, unifiedDiff, fileExtension) => {
           addDiffMessage(filePath, unifiedDiff, fileExtension);

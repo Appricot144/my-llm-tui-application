@@ -478,6 +478,42 @@ export function editFile(
   return editFileInternal(inputPath, startLine, endLine, newContent).message;
 }
 
+/** ファイルを書き込まずに編集後の差分だけを計算して返す（確認 UI 用） */
+export function previewEditDiff(
+  inputPath: string,
+  startLine: number,
+  endLine: number,
+  newContent: string
+): DiffResult | undefined {
+  let target: string;
+  try {
+    target = validatePath(inputPath);
+  } catch {
+    return undefined;
+  }
+
+  if (!fs.existsSync(target) || !fs.statSync(target).isFile()) return undefined;
+
+  let lines: string[];
+  try {
+    lines = fs.readFileSync(target, "utf-8").split("\n");
+  } catch {
+    return undefined;
+  }
+
+  const total = lines.length;
+  if (startLine < 1 || endLine > total || startLine > endLine) return undefined;
+
+  const oldLines = [...lines];
+  const newLines = newContent.split("\n");
+  const s = startLine - 1;
+  lines.splice(s, endLine - startLine + 1, ...newLines);
+
+  const ext = inputPath.split(".").pop() ?? "";
+  const unifiedDiff = buildUnifiedDiff(inputPath, oldLines, lines);
+  return unifiedDiff ? { unifiedDiff, filePath: inputPath, fileExtension: ext } : undefined;
+}
+
 export function createDirectory(inputPath: string): string {
   let target: string;
   try {
