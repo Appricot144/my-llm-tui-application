@@ -4,14 +4,6 @@ import type { KeyEvent, InputRenderable } from "@opentui/core";
 import type { PendingConfirm } from "../index.tsx";
 import { isCommandInput, parseCommand } from "../utils/commandParser.ts";
 
-const EXT_TO_FILETYPE: Record<string, string> = {
-  ts: "typescript", tsx: "typescript",
-  js: "javascript", jsx: "javascript",
-  py: "python", rs: "rust", go: "go",
-  rb: "ruby", java: "java", json: "json",
-  yaml: "yaml", yml: "yaml", md: "markdown",
-  sh: "bash", toml: "toml",
-};
 
 interface ChatInputProps {
   onSubmit: (value: string) => void;
@@ -79,11 +71,7 @@ export function ChatInput({
 
   // 承認モードの表示
   if (pendingConfirm) {
-    const { toolName, input, previewDiff } = pendingConfirm;
-    const headerLabel = previewDiff
-      ? `[承認待ち] ${toolName}: ${previewDiff.filePath}`
-      : `[承認待ち] ${toolName}(${JSON.stringify(input).slice(0, 60)})`;
-    const filetype = previewDiff ? EXT_TO_FILETYPE[previewDiff.fileExtension] : undefined;
+    const inputPreview = JSON.stringify(pendingConfirm.input).slice(0, 60);
     return (
       <box
         flexDirection="column"
@@ -94,17 +82,9 @@ export function ChatInput({
         paddingRight={1}
         flexShrink={0}
       >
-        <text fg="#f4a261" attributes={1}>{headerLabel}</text>
-        {previewDiff && (
-          <diff
-            diff={previewDiff.unifiedDiff}
-            view="unified"
-            showLineNumbers={true}
-            filetype={filetype}
-            addedBg="#1e3a1e"
-            removedBg="#3a1e1e"
-          />
-        )}
+        <text fg="#f4a261" attributes={1}>
+          {`[承認待ち] ${pendingConfirm.toolName}(${inputPreview})`}
+        </text>
         <box flexDirection="row">
           <text fg="#f4a261" attributes={1}>{"?"} </text>
           <text fg="#ffffff">実行しますか？ </text>

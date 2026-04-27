@@ -5,7 +5,7 @@
  * ストリーミング対応で、テキスト生成をリアルタイムにコールバックで通知する。
  */
 
-import { TOOL_SCHEMAS, dispatch, setRoot, previewEditDiff, type DiffResult } from "../tools/tools.ts";
+import { TOOL_SCHEMAS, dispatch, setRoot, previewEditDiff } from "../tools/tools.ts";
 import { setSecurityConfig } from "../security/security.ts";
 import { getPrompt, type Mode } from "./prompts.ts";
 import { planTasks, needsPlanning, type TaskPlan } from "./planner.ts";
@@ -57,11 +57,7 @@ export interface RunOptions {
   /** ツール呼び出し時のコールバック（UI表示用） */
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void;
   /** 書き込みツール実行前の承認コールバック。false を返すとキャンセル */
-  onToolConfirm?: (
-    toolName: string,
-    toolInput: Record<string, unknown>,
-    previewDiff?: DiffResult
-  ) => Promise<boolean>;
+  onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>;
   /** edit_file 成功時に unified diff を通知するコールバック */
   onToolDiff?: (filePath: string, unifiedDiff: string, fileExtension: string) => void;
   /** Planning フェーズ完了時のコールバック（chat モード以外で呼ばれる） */
@@ -208,7 +204,7 @@ async function handleToolUse(
   contentBlocks: NormalizedContentBlock[],
   fileCache: Map<string, string>,
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
-  onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>, previewDiff?: DiffResult) => Promise<boolean>,
+  onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>,
   onToolDiff?: (filePath: string, unifiedDiff: string, fileExtension: string) => void,
 ): Promise<ToolResultBlockParam[]> {
   const results: ToolResultBlockParam[] = [];
@@ -222,17 +218,22 @@ async function handleToolUse(
     onToolUse?.(toolName, toolInput);
 
     // 書き込みツールは実行前にユーザー確認を取る
+    // edit_file はプレビュー diff をメッセージリストに先出しする
+    let diffShownAsPreview = false;
     if (WRITE_TOOLS.has(toolName) && onToolConfirm) {
-      const diffPreview =
-        toolName === "edit_file"
-          ? previewEditDiff(
-              toolInput.path as string,
-              toolInput.start_line as number,
-              toolInput.end_line as number,
-              toolInput.new_content as string
-            )
-          : undefined;
-      const confirmed = await onToolConfirm(toolName, toolInput, diffPreview);
+      if (toolName === "edit_file" && onToolDiff) {
+        const diffPreview = previewEditDiff(
+          toolInput.path as string,
+          toolInput.start_line as number,
+          toolInput.end_line as number,
+          toolInput.new_content as string
+        );
+        if (diffPreview) {
+          onToolDiff(diffPreview.filePath, diffPreview.unifiedDiff, diffPreview.fileExtension);
+          diffShownAsPreview = true;
+        }
+      }
+      const confirmed = await onToolConfirm(toolName, toolInput);
       if (!confirmed) {
         results.push({
           type: "tool_result",
@@ -258,7 +259,8 @@ async function handleToolUse(
       if (cacheKey !== null) {
         fileCache.set(cacheKey, output);
       }
-      if (dispatchResult.diff?.unifiedDiff && onToolDiff) {
+      // プレビューとして既に表示済みの場合は重複を避ける
+      if (dispatchResult.diff?.unifiedDiff && onToolDiff && !diffShownAsPreview) {
         const { filePath, unifiedDiff, fileExtension } = dispatchResult.diff;
         onToolDiff(filePath, unifiedDiff, fileExtension);
       }
