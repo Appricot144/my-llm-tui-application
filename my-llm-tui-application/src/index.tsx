@@ -27,7 +27,7 @@ export interface PendingConfirm {
 }
 
 function App({ onExit }: { onExit: () => void }) {
-  const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage } = useChat();
+  const { messages, loading, setLoading, addUserMessage, addAssistantMessage, updateLastAssistantMessage, addDiffMessage } = useChat();
   const [mode, setMode] = useState<Mode>("chat");
   const [totalTokenUsage, setTotalTokenUsage] = useState<TokenUsage>(createTokenUsage());
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
@@ -103,9 +103,9 @@ function App({ onExit }: { onExit: () => void }) {
     planPrefixRef.current = "";
 
     try {
-      const conversationHistory = messages.map(
-        ({ role, content }: Message) => ({ role, content })
-      );
+      const conversationHistory = messages
+        .filter((m: Message) => m.role !== "diff")
+        .map(({ role, content }: Message) => ({ role: role as "user" | "assistant", content }));
 
       const result = await run({
         provider,
@@ -132,6 +132,9 @@ function App({ onExit }: { onExit: () => void }) {
           new Promise<boolean>((resolve) => {
             setPendingConfirm({ toolName, input: toolInput, resolve });
           }),
+        onToolDiff: (filePath, unifiedDiff, fileExtension) => {
+          addDiffMessage(filePath, unifiedDiff, fileExtension);
+        },
       });
 
       setTotalTokenUsage((prev) => addTokenUsage(prev, {

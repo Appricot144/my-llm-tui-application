@@ -11,6 +11,7 @@ import {
   editFile,
   createDirectory,
   dispatch,
+  buildUnifiedDiff,
 } from "../tools/tools.ts";
 import { resetSecurity } from "../security/security.ts";
 
@@ -88,22 +89,22 @@ describe("tools", () => {
   describe("dispatch", () => {
     it("list_directory を呼び出せる", () => {
       const result = dispatch("list_directory", { path: "." });
-      expect(result).toContain("hello.ts");
+      expect(result.output).toContain("hello.ts");
     });
 
     it("read_file を呼び出せる", () => {
       const result = dispatch("read_file", { path: "hello.ts" });
-      expect(result).toContain("hello");
+      expect(result.output).toContain("hello");
     });
 
     it("search_code を呼び出せる", () => {
       const result = dispatch("search_code", { pattern: "world" });
-      expect(result).toContain("world.ts");
+      expect(result.output).toContain("world.ts");
     });
 
     it("未知のツール名でエラーを返す", () => {
       const result = dispatch("unknown_tool", {});
-      expect(result).toContain("未知のツール");
+      expect(result.output).toContain("未知のツール");
     });
   });
 
@@ -208,7 +209,7 @@ describe("tools", () => {
   describe("dispatch — 書き込みツール", () => {
     it("write_file を呼び出せる", () => {
       const result = dispatch("write_file", { path: "dispatched.ts", content: "const x = 1;\n" });
-      expect(result).toContain("書き込み完了");
+      expect(result.output).toContain("書き込み完了");
     });
 
     it("edit_file を呼び出せる", () => {
@@ -218,12 +219,14 @@ describe("tools", () => {
         end_line: 1,
         new_content: 'const msg = "edited";',
       });
-      expect(result).toContain("編集完了");
+      expect(result.output).toContain("編集完了");
+      expect(result.diff).toBeDefined();
+      expect(result.diff?.unifiedDiff).toContain("--- a/hello.ts");
     });
 
     it("create_directory を呼び出せる", () => {
       const result = dispatch("create_directory", { path: "dispatchdir" });
-      expect(result).toContain("ディレクトリ作成");
+      expect(result.output).toContain("ディレクトリ作成");
     });
   });
 
@@ -237,5 +240,55 @@ describe("tools", () => {
       const result = readFile("/etc/passwd");
       expect(result).toContain("セキュリティエラー");
     });
+  });
+});
+
+describe("buildUnifiedDiff", () => {
+  it("1行を別の1行に置換した場合に unified diff を返す", () => {
+    const old = ["const a = 1;", "const b = 2;", "const c = 3;"];
+    const next = ["const a = 1;", "const b = 99;", "const c = 3;"];
+    const diff = buildUnifiedDiff("src/test.ts", old, next);
+    expect(diff).toContain("--- a/src/test.ts");
+    expect(diff).toContain("+++ b/src/test.ts");
+    expect(diff).toContain("-const b = 2;");
+    expect(diff).toContain("+const b = 99;");
+  });
+
+  it("変更なしの場合は空文字列を返す", () => {
+    const lines = ["const a = 1;", "const b = 2;"];
+    expect(buildUnifiedDiff("src/test.ts", lines, [...lines])).toBe("");
+  });
+
+  it("コンテキスト行（最大3行）が含まれる", () => {
+    const old = ["a", "b", "c", "d", "e", "f", "g"];
+    const next = ["a", "b", "c", "X", "e", "f", "g"];
+    const diff = buildUnifiedDiff("test.ts", old, next);
+    expect(diff).toContain(" a"); // context before
+    expect(diff).toContain(" g"); // context after
+    expect(diff).toContain("-d");
+    expect(diff).toContain("+X");
+  });
+
+  it("追加のみの場合に + 行が含まれる", () => {
+    const old = ["line1", "line2"];
+    const next = ["line1", "new line", "line2"];
+    const diff = buildUnifiedDiff("test.ts", old, next);
+    expect(diff).toContain("+new line");
+    expect(diff).not.toContain("-new line");
+  });
+
+  it("削除のみの場合に - 行が含まれる", () => {
+    const old = ["line1", "remove me", "line2"];
+    const next = ["line1", "line2"];
+    const diff = buildUnifiedDiff("test.ts", old, next);
+    expect(diff).toContain("-remove me");
+    expect(diff).not.toContain("+remove me");
+  });
+
+  it("@@ ヘッダーの行番号が正しい", () => {
+    const old = ["a", "b", "c"];
+    const next = ["a", "X", "c"];
+    const diff = buildUnifiedDiff("test.ts", old, next);
+    expect(diff).toMatch(/@@ -\d+,\d+ \+\d+,\d+ @@/);
   });
 });

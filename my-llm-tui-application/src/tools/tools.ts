@@ -19,6 +19,207 @@ import {
 const MAX_FILE_LINES = 500;    // 一度に読む最大行数
 const MAX_SEARCH_RESULTS = 20; // grep の最大マッチ数
 
+// ========================================================
+// 型定義
+// ========================================================
+
+export interface DiffResult {
+  unifiedDiff: string;
+  filePath: string;
+  fileExtension: string;
+}
+
+interface EditFileResult {
+  message: string;
+  diff?: DiffResult;
+}
+
+export interface DispatchResult {
+  output: string;
+  diff?: DiffResult;
+}
+
+// ========================================================
+// unified diff 生成
+// ========================================================
+
+type DiffOp = { op: "keep" | "delete" | "insert"; line: string };
+
+const CONTEXT_LINES = 3;
+const MAX_DIFF_LINES = 2000;
+
+function computeLineDiff(oldLines: string[], newLines: string[]): DiffOp[] {
+  const N = oldLines.length;
+  const M = newLines.length;
+
+  if (N + M > MAX_DIFF_LINES) {
+    return [
+      ...oldLines.map((line) => ({ op: "delete" as const, line })),
+      ...newLines.map((line) => ({ op: "insert" as const, line })),
+    ];
+  }
+
+  const MAX = N + M;
+  const offset = MAX;
+  const V = new Array<number>(2 * MAX + 2).fill(-1);
+  V[offset + 1] = 0;
+  const trace: number[][] = [];
+
+  outer: for (let d = 0; d <= MAX; d++) {
+    trace.push([...V]);
+    for (let k = -d; k <= d; k += 2) {
+      const kIdx = k + offset;
+      let x: number;
+      if (k === -d || (k !== d && (V[kIdx - 1] ?? -1) < (V[kIdx + 1] ?? -1))) {
+        x = V[kIdx + 1] ?? 0;
+      } else {
+        x = (V[kIdx - 1] ?? 0) + 1;
+      }
+      let y = x - k;
+      while (x < N && y < M && oldLines[x] === newLines[y]) {
+        x++;
+        y++;
+      }
+      V[kIdx] = x;
+      if (x >= N && y >= M) break outer;
+    }
+  }
+
+  return backtrack(trace, oldLines, newLines, offset);
+}
+
+function backtrack(
+  trace: number[][],
+  oldLines: string[],
+  newLines: string[],
+  offset: number
+): DiffOp[] {
+  const ops: DiffOp[] = [];
+  let x = oldLines.length;
+  let y = newLines.length;
+
+  for (let d = trace.length - 1; d >= 0; d--) {
+    const V = trace[d]!;
+    const k = x - y;
+    const kIdx = k + offset;
+    let prevK: number;
+    if (k === -d || (k !== d && (V[kIdx - 1] ?? -1) < (V[kIdx + 1] ?? -1))) {
+      prevK = k + 1;
+    } else {
+      prevK = k - 1;
+    }
+    const prevX = V[prevK + offset] ?? 0;
+    const prevY = prevX - prevK;
+
+    while (x > prevX && y > prevY) {
+      x--;
+      y--;
+      ops.unshift({ op: "keep", line: oldLines[x]! });
+    }
+
+    if (d > 0) {
+      if (prevK === k + 1) {
+        ops.unshift({ op: "insert", line: newLines[y - 1]! });
+        y--;
+      } else {
+        ops.unshift({ op: "delete", line: oldLines[x - 1]! });
+        x--;
+      }
+    }
+  }
+  return ops;
+}
+
+export function buildUnifiedDiff(
+  filePath: string,
+  oldLines: string[],
+  newLines: string[]
+): string {
+  const ops = computeLineDiff(oldLines, newLines);
+  if (ops.every((o) => o.op === "keep")) return "";
+
+  const hunks: string[] = [];
+  let oldPos = 1;
+  let newPos = 1;
+  let i = 0;
+
+  while (i < ops.length) {
+    // 次の変更箇所を探す
+    if (ops[i]!.op === "keep") {
+      oldPos++;
+      newPos++;
+      i++;
+      continue;
+    }
+
+    // 変更ブロックの開始インデックスと、コンテキスト開始位置を決定
+    const changeStart = i;
+    const ctxStart = Math.max(0, changeStart - CONTEXT_LINES);
+
+    // 変更ブロックの終了を探す（連続する変更 + コンテキスト範囲で結合）
+    let changeEnd = i;
+    while (changeEnd < ops.length) {
+      if (ops[changeEnd]!.op !== "keep") {
+        changeEnd++;
+      } else {
+        // keep が連続する場合、次の変更まで 2*CONTEXT_LINES 以内ならまとめる
+        let nextChange = changeEnd + 1;
+        while (nextChange < ops.length && ops[nextChange]!.op === "keep") nextChange++;
+        if (nextChange < ops.length && nextChange - changeEnd <= 2 * CONTEXT_LINES) {
+          changeEnd = nextChange;
+        } else {
+          break;
+        }
+      }
+    }
+    const ctxEnd = Math.min(ops.length, changeEnd + CONTEXT_LINES);
+
+    // ハンクのヘッダー行番号を計算
+    let oldStart = 1;
+    let newStart = 1;
+    let tmpOld = 1;
+    let tmpNew = 1;
+    for (let j = 0; j < ctxStart; j++) {
+      if (ops[j]!.op !== "insert") tmpOld++;
+      if (ops[j]!.op !== "delete") tmpNew++;
+    }
+    oldStart = tmpOld;
+    newStart = tmpNew;
+
+    let oldCount = 0;
+    let newCount = 0;
+    const hunkLines: string[] = [];
+    for (let j = ctxStart; j < ctxEnd; j++) {
+      const op = ops[j]!;
+      if (op.op === "keep") {
+        hunkLines.push(` ${op.line}`);
+        oldCount++;
+        newCount++;
+      } else if (op.op === "delete") {
+        hunkLines.push(`-${op.line}`);
+        oldCount++;
+      } else {
+        hunkLines.push(`+${op.line}`);
+        newCount++;
+      }
+    }
+
+    hunks.push(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`);
+    hunks.push(...hunkLines);
+
+    // 次のイテレーションのために i を ctxEnd に進める
+    i = ctxEnd;
+    // oldPos/newPos を ctxEnd まで進める（使用しないが一貫性のため）
+    for (let j = ctxStart; j < ctxEnd; j++) {
+      if (ops[j]!.op !== "insert") oldPos++;
+      if (ops[j]!.op !== "delete") newPos++;
+    }
+  }
+
+  if (hunks.length === 0) return "";
+  return `--- a/${filePath}\n+++ b/${filePath}\n${hunks.join("\n")}`;
+}
+
 const IGNORE_DIRS = new Set([".git", "__pycache__", "node_modules", ".venv", "dist", "build"]);
 const SKIP_EXTENSIONS = new Set([".pyc", ".lock", ".png", ".jpg", ".svg", ".woff", ".ttf"]);
 
@@ -220,35 +421,36 @@ export function writeFile(inputPath: string, content: string): string {
   return `書き込み完了: ${inputPath} (${lineCount} 行)`;
 }
 
-export function editFile(
+function editFileInternal(
   inputPath: string,
   startLine: number,
   endLine: number,
   newContent: string
-): string {
+): EditFileResult {
   let target: string;
   try {
     target = validatePath(inputPath);
   } catch (e) {
-    return `セキュリティエラー: ${(e as Error).message}`;
+    return { message: `セキュリティエラー: ${(e as Error).message}` };
   }
 
   if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
-    return `エラー: ${inputPath} はファイルではありません`;
+    return { message: `エラー: ${inputPath} はファイルではありません` };
   }
 
   let lines: string[];
   try {
     lines = fs.readFileSync(target, "utf-8").split("\n");
   } catch (e) {
-    return `エラー: 読み取り失敗 (${(e as Error).message})`;
+    return { message: `エラー: 読み取り失敗 (${(e as Error).message})` };
   }
 
   const total = lines.length;
   if (startLine < 1 || endLine > total || startLine > endLine) {
-    return `エラー: 行範囲が不正です (${startLine}〜${endLine} / 全${total}行)`;
+    return { message: `エラー: 行範囲が不正です (${startLine}〜${endLine} / 全${total}行)` };
   }
 
+  const oldLines = [...lines];
   const newLines = newContent.split("\n");
   const s = startLine - 1; // 0-indexed
   lines.splice(s, endLine - startLine + 1, ...newLines);
@@ -256,10 +458,24 @@ export function editFile(
   try {
     fs.writeFileSync(target, lines.join("\n"), "utf-8");
   } catch (e) {
-    return `エラー: ${(e as Error).message}`;
+    return { message: `エラー: ${(e as Error).message}` };
   }
 
-  return `編集完了: ${inputPath} (${startLine}〜${endLine}行目を ${newLines.length} 行に置換)`;
+  const ext = inputPath.split(".").pop() ?? "";
+  const unifiedDiff = buildUnifiedDiff(inputPath, oldLines, lines);
+  return {
+    message: `編集完了: ${inputPath} (${startLine}〜${endLine}行目を ${newLines.length} 行に置換)`,
+    diff: unifiedDiff ? { unifiedDiff, filePath: inputPath, fileExtension: ext } : undefined,
+  };
+}
+
+export function editFile(
+  inputPath: string,
+  startLine: number,
+  endLine: number,
+  newContent: string
+): string {
+  return editFileInternal(inputPath, startLine, endLine, newContent).message;
 }
 
 export function createDirectory(inputPath: string): string {
@@ -426,40 +642,48 @@ export const TOOL_SCHEMAS = [
 
 type ToolInput = Record<string, unknown>;
 
-export function dispatch(toolName: string, toolInput: ToolInput): string {
+export function dispatch(toolName: string, toolInput: ToolInput): DispatchResult {
   try {
     switch (toolName) {
       case "list_directory":
-        return listDirectory((toolInput.path as string) ?? ".");
+        return { output: listDirectory((toolInput.path as string) ?? ".") };
       case "read_file":
-        return readFile(
-          toolInput.path as string,
-          toolInput.start_line as number | undefined,
-          toolInput.end_line as number | undefined
-        );
+        return {
+          output: readFile(
+            toolInput.path as string,
+            toolInput.start_line as number | undefined,
+            toolInput.end_line as number | undefined
+          ),
+        };
       case "search_code":
-        return searchCode(
-          toolInput.pattern as string,
-          (toolInput.path as string) ?? "."
-        );
+        return {
+          output: searchCode(
+            toolInput.pattern as string,
+            (toolInput.path as string) ?? "."
+          ),
+        };
       case "write_file":
-        return writeFile(
-          toolInput.path as string,
-          toolInput.content as string
-        );
-      case "edit_file":
-        return editFile(
+        return {
+          output: writeFile(
+            toolInput.path as string,
+            toolInput.content as string
+          ),
+        };
+      case "edit_file": {
+        const result = editFileInternal(
           toolInput.path as string,
           toolInput.start_line as number,
           toolInput.end_line as number,
           toolInput.new_content as string
         );
+        return { output: result.message, diff: result.diff };
+      }
       case "create_directory":
-        return createDirectory(toolInput.path as string);
+        return { output: createDirectory(toolInput.path as string) };
       default:
-        return `エラー: 未知のツール '${toolName}'`;
+        return { output: `エラー: 未知のツール '${toolName}'` };
     }
   } catch (e) {
-    return `実行エラー (${toolName}): ${(e as Error).message}`;
+    return { output: `実行エラー (${toolName}): ${(e as Error).message}` };
   }
 }

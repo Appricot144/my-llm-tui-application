@@ -58,6 +58,8 @@ export interface RunOptions {
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void;
   /** 書き込みツール実行前の承認コールバック。false を返すとキャンセル */
   onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>;
+  /** edit_file 成功時に unified diff を通知するコールバック */
+  onToolDiff?: (filePath: string, unifiedDiff: string, fileExtension: string) => void;
   /** Planning フェーズ完了時のコールバック（chat モード以外で呼ばれる） */
   onPlanGenerated?: (plan: TaskPlan) => void;
 }
@@ -87,6 +89,7 @@ export async function run({
   onTextDelta,
   onToolUse,
   onToolConfirm,
+  onToolDiff,
   onPlanGenerated,
 }: RunOptions): Promise<RunResult> {
   const useTools = mode !== "chat" && provider.supportsTools;
@@ -163,7 +166,7 @@ export async function run({
     }
 
     if (response.stopReason === "tool_use") {
-      const toolResults = await handleToolUse(response.content, fileCache, onToolUse, onToolConfirm);
+      const toolResults = await handleToolUse(response.content, fileCache, onToolUse, onToolConfirm, onToolDiff);
 
       // tool_use_id → ツール名のマップを response.content から構築
       const toolNames = new Map<string, string>(
@@ -202,6 +205,7 @@ async function handleToolUse(
   fileCache: Map<string, string>,
   onToolUse?: (toolName: string, toolInput: Record<string, unknown>) => void,
   onToolConfirm?: (toolName: string, toolInput: Record<string, unknown>) => Promise<boolean>,
+  onToolDiff?: (filePath: string, unifiedDiff: string, fileExtension: string) => void,
 ): Promise<ToolResultBlockParam[]> {
   const results: ToolResultBlockParam[] = [];
 
@@ -236,9 +240,14 @@ async function handleToolUse(
     if (cacheKey !== null && fileCache.has(cacheKey)) {
       output = fileCache.get(cacheKey)!;
     } else {
-      output = dispatch(toolName, toolInput);
+      const dispatchResult = dispatch(toolName, toolInput);
+      output = dispatchResult.output;
       if (cacheKey !== null) {
         fileCache.set(cacheKey, output);
+      }
+      if (dispatchResult.diff?.unifiedDiff && onToolDiff) {
+        const { filePath, unifiedDiff, fileExtension } = dispatchResult.diff;
+        onToolDiff(filePath, unifiedDiff, fileExtension);
       }
     }
 

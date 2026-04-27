@@ -3,6 +3,24 @@ import { LoadingSpinner } from "./LoadingSpinner.tsx";
 import { MarkdownContent } from "./MarkdownContent.tsx";
 import { splitUserMessageLines, isStreamingMessage } from "../utils/messageUtils.ts";
 
+const EXT_TO_FILETYPE: Record<string, string> = {
+  ts: "typescript",
+  tsx: "typescript",
+  js: "javascript",
+  jsx: "javascript",
+  py: "python",
+  rs: "rust",
+  go: "go",
+  rb: "ruby",
+  java: "java",
+  json: "json",
+  yaml: "yaml",
+  yml: "yaml",
+  md: "markdown",
+  sh: "bash",
+  toml: "toml",
+};
+
 interface MessageListProps {
   messages: Message[];
   loading: boolean;
@@ -20,9 +38,10 @@ export function MessageList({ messages, loading }: MessageListProps) {
   return (
     <scrollbox flexGrow={1} stickyScroll={true} stickyStart="bottom" paddingLeft={1} paddingRight={1}>
       {messages.map((msg, idx) => {
-        const isUser = msg.role === "user";
-        const isLastMsg = idx === messages.length - 1;
-        if (isUser) {
+        if (msg.role === "diff") {
+          return <DiffMessage key={msg.id} message={msg} />;
+        }
+        if (msg.role === "user") {
           return <UserMessage key={msg.id} content={msg.content} />;
         }
         return (
@@ -66,6 +85,29 @@ function AssistantMessage({ content, streaming }: { content: string; streaming?:
       <text fg="#81c784" attributes={1}>  AI</text>
       <box paddingLeft={2}>
         <MarkdownContent content={content} streaming={streaming} />
+      </box>
+    </box>
+  );
+}
+
+function DiffMessage({ message }: { message: Message }) {
+  const meta = message.diffMeta!;
+  const filetype = EXT_TO_FILETYPE[meta.fileExtension];
+  return (
+    <box flexDirection="column" marginTop={1}>
+      <box flexDirection="row">
+        <text fg="#ffb74d">  diff </text>
+        <text fg="#888888">{meta.filePath}</text>
+      </box>
+      <box paddingLeft={2}>
+        <diff
+          diff={meta.unifiedDiff}
+          view="unified"
+          showLineNumbers={true}
+          filetype={filetype}
+          addedBg="#1e3a1e"
+          removedBg="#3a1e1e"
+        />
       </box>
     </box>
   );

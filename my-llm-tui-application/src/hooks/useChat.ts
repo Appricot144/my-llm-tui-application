@@ -36,6 +36,16 @@ export class ChatStore {
     });
   }
 
+  addDiffMessage(filePath: string, unifiedDiff: string, fileExtension: string): void {
+    this.messages.push({
+      id: generateId(),
+      role: "diff",
+      content: filePath,
+      timestamp: new Date(),
+      diffMeta: { unifiedDiff, filePath, fileExtension },
+    });
+  }
+
   updateLastAssistantMessage(content: string): void {
     for (let i = this.messages.length - 1; i >= 0; i--) {
       if (this.messages[i]!.role === "assistant") {
@@ -50,7 +60,9 @@ export class ChatStore {
   }
 
   getMessagesForApi(): { role: Role; content: string }[] {
-    return this.messages.map(({ role, content }) => ({ role, content }));
+    return this.messages
+      .filter((m) => m.role !== "diff")
+      .map(({ role, content }) => ({ role: role as Role, content }));
   }
 }
 
@@ -94,6 +106,20 @@ export function useChat() {
     });
   }, []);
 
+  const addDiffMessage = useCallback(
+    (filePath: string, unifiedDiff: string, fileExtension: string) => {
+      const newMessage: Message = {
+        id: generateId(),
+        role: "diff",
+        content: filePath,
+        timestamp: new Date(),
+        diffMeta: { unifiedDiff, filePath, fileExtension },
+      };
+      setMessages((prev) => [...prev, newMessage]);
+    },
+    []
+  );
+
   return {
     messages,
     loading,
@@ -101,5 +127,6 @@ export function useChat() {
     addUserMessage,
     addAssistantMessage,
     updateLastAssistantMessage,
+    addDiffMessage,
   };
 }
