@@ -26,7 +26,7 @@ import type {
 // ========================================================
 
 const MAX_ITERATIONS = 20;
-const MAX_TOKENS = 4096;
+const MAX_TOKENS = 16384;
 
 /** 実行前にユーザー確認が必要なツール */
 const WRITE_TOOLS = new Set(["write_file", "edit_file", "create_directory"]);
@@ -157,9 +157,19 @@ export async function run({
       content: response.content as ContentBlockParam[],
     });
 
-    if (response.stopReason === "end_turn" || response.stopReason === "max_tokens") {
+    if (response.stopReason === "end_turn") {
       return {
         text: extractText(response.content),
+        newMessages,
+        tokenUsage,
+      };
+    }
+
+    if (response.stopReason === "max_tokens") {
+      const partialText = extractText(response.content);
+      const warning = `[出力が最大トークン数 (${MAX_TOKENS}) に達したため、回答が途中で打ち切られました]`;
+      return {
+        text: partialText ? `${partialText}\n\n${warning}` : warning,
         newMessages,
         tokenUsage,
       };
@@ -186,7 +196,12 @@ export async function run({
       continue;
     }
 
-    break;
+    // 型上は到達不能だが、プロバイダーが想定外の値を返した場合の防御
+    return {
+      text: `エラー: 予期しない stopReason "${response.stopReason as string}" が返されました`,
+      newMessages,
+      tokenUsage,
+    };
   }
 
   return {

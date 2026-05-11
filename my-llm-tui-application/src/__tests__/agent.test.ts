@@ -122,6 +122,73 @@ describe("buildSystemParam", () => {
 });
 
 // ========================================================
+// stopReason ハンドリングのテスト
+// ========================================================
+
+function makeProviderWithStopReason(
+  text: string,
+  stopReason: string
+): LLMProvider {
+  return {
+    supportsTools: false,
+    supportsPromptCaching: false,
+    streamMessage: vi.fn().mockResolvedValue({
+      content: [{ type: "text", text }],
+      stopReason,
+      usage: { inputTokens: 10, outputTokens: 20 },
+    }),
+  } as unknown as LLMProvider;
+}
+
+describe("stopReason ハンドリング", () => {
+  it("max_tokens のとき部分テキストに打ち切り警告を付けて返すこと", async () => {
+    const provider = makeProviderWithStopReason("途中まで生成した", "max_tokens");
+    const result = await run({
+      provider,
+      model: "claude-sonnet-4",
+      userMessage: "長い説明をして",
+      conversationHistory: [],
+      projectRoot: "/tmp",
+      mode: "chat",
+    });
+
+    expect(result.text).toContain("途中まで生成した");
+    expect(result.text).toContain("最大トークン数");
+    expect(result.text).toContain("16384");
+  });
+
+  it("max_tokens でテキストが空のときも警告メッセージを返すこと", async () => {
+    const provider = makeProviderWithStopReason("", "max_tokens");
+    const result = await run({
+      provider,
+      model: "claude-sonnet-4",
+      userMessage: "長い説明をして",
+      conversationHistory: [],
+      projectRoot: "/tmp",
+      mode: "chat",
+    });
+
+    expect(result.text).toContain("最大トークン数");
+    expect(result.text).not.toMatch(/^\s*\n/);
+  });
+
+  it("想定外の stopReason のときエラーメッセージに stopReason 値を含めて返すこと", async () => {
+    const provider = makeProviderWithStopReason("some text", "stop_sequence");
+    const result = await run({
+      provider,
+      model: "claude-sonnet-4",
+      userMessage: "なにか答えて",
+      conversationHistory: [],
+      projectRoot: "/tmp",
+      mode: "chat",
+    });
+
+    expect(result.text).toContain("予期しない stopReason");
+    expect(result.text).toContain("stop_sequence");
+  });
+});
+
+// ========================================================
 // planning スキップ動作のテスト
 // ========================================================
 
