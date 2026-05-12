@@ -137,6 +137,8 @@ function App({ onExit }: { onExit: () => void }) {
         },
       });
 
+      updateLastAssistantMessage(planPrefixRef.current + result.text);
+
       setTotalTokenUsage((prev) => addTokenUsage(prev, {
         input_tokens: result.tokenUsage.inputTokens,
         output_tokens: result.tokenUsage.outputTokens,
